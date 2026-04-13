@@ -1,4 +1,4 @@
-data/
+data/*
 frontend/node_modules
 *.pyc
 .env
