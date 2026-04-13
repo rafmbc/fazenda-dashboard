@@ -1,0 +1,733 @@
+<!DOCTYPE html>
+<html lang="pt-BR" data-theme="dark" data-layout="desktop">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Fazenda de Precisão — Digital Twin</title>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500;600&family=Syne:wght@700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/src/styles.css">
+</head>
+<body>
+  <div id="fullscreen-loader" class="fullscreen-loader hidden">
+    <div class="fullscreen-loader-card">
+      <div class="fullscreen-loader-icon">⏳</div>
+      <div class="fullscreen-loader-text">Buscando dados...</div>
+    </div>
+  </div>
+  <div class="app-shell">
+
+  <!-- HEADER -->
+  <header class="header">
+    <a class="header-logo" href="#">
+      <div class="logo-icon">🌿</div>
+      <div>
+        <div class="logo-text">FazendaTwin</div>
+        <div class="logo-sub">Digital Monitoring</div>
+      </div>
+    </a>
+
+    <div class="header-center">
+      <button class="view-btn active" onclick="switchView('operacional', this)">Operacional</button>
+      <button class="view-btn" onclick="switchView('gerencial', this)">Gerencial</button>
+    </div>
+
+    <div class="header-controls">
+      <div class="date-picker">
+        <input type="datetime-local" id="start-date" value="2025-12-01T19:00" title="Data de Início">
+        <span>até</span>
+        <input type="datetime-local" id="end-date" value="2025-12-01T20:00" title="Data de Fim">
+        <button onclick="fetchData()" title="Buscar Dados">🔍</button>
+      </div>
+      <button class="ctrl-btn" onclick="toggleTheme()" title="Alternar tema" id="theme-btn">🌙</button>
+    </div>
+  </header>
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+    <div class="nav-section-label" data-view="operacional">Operacional</div>
+    <div class="nav-item active" data-view="operacional" onclick="goToSection('op-overview', this)">
+      <span class="nav-icon">🗺️</span> Visão Geral
+      <span class="nav-badge">4</span>
+    </div>
+    <div class="nav-item" data-view="operacional" onclick="goToSection('op-talhoes', this)">
+      <span class="nav-icon">🌾</span> Talhões
+    </div>
+    <div class="nav-item" data-view="operacional" onclick="goToSection('op-cameras', this)">
+      <span class="nav-icon">📷</span> Câmeras
+    </div>
+    <div class="nav-item" data-view="operacional" onclick="goToSection('op-umidade', this)">
+      <span class="nav-icon">💧</span> Umidade Solo
+    </div>
+
+    <div class="nav-section-label" data-view="gerencial" style="margin-top:8px;">Gerencial</div>
+    <div class="nav-item" data-view="gerencial" onclick="goToSection('ger-overview', this)">
+      <span class="nav-icon">📊</span> Visão Geral
+    </div>
+    <div class="nav-item" data-view="gerencial" onclick="goToSection('ger-energia', this)">
+      <span class="nav-icon">⚡</span> Energia
+    </div>
+    <div class="nav-item" data-view="gerencial" onclick="goToSection('ger-saude', this)">
+      <span class="nav-icon">🌿</span> Saúde Lavoura
+    </div>
+
+    <div class="sidebar-footer">
+      <div class="farm-info">
+        <strong>Fazenda Santa Clara</strong>
+        Área total: 1.240 ha<br>
+        Talhões: 12 ativos<br>
+        Última sync: 17:10
+      </div>
+    </div>
+  </aside>
+
+  <!-- MAIN CONTENT -->
+  <main class="main-content">
+
+    <!-- ======================================= -->
+    <!-- OPERACIONAL: VISÃO GERAL                -->
+    <!-- ======================================= -->
+    <section class="page-section active" id="op-overview">
+      <div class="section-header">
+        <div>
+          <div class="section-title">Visão Geral Operacional</div>
+          <div class="section-subtitle">Monitoramento em tempo real · Talhões ativos</div>
+        </div>
+        <div class="date-badge">23/03/2026 · 17:10</div>
+      </div>
+
+      <!-- KPIs -->
+      <div class="kpi-grid">
+        <div class="kpi-card" style="--accent-color: var(--accent-red)">
+          <div class="kpi-label">Alertas Ativos</div>
+          <div class="kpi-value">4<span class="kpi-unit">alertas</span></div>
+          <div class="kpi-trend trend-down">▲ +2 desde ontem</div>
+          <div class="kpi-icon">🚨</div>
+        </div>
+        <div class="kpi-card" style="--accent-color: var(--accent-blue)">
+          <div class="kpi-label">Umidade Média</div>
+          <div class="kpi-value">47<span class="kpi-unit">%</span></div>
+          <div class="kpi-trend trend-up">✓ Faixa ideal</div>
+          <div class="kpi-icon">💧</div>
+        </div>
+        <div class="kpi-card" style="--accent-color: var(--green-500)">
+          <div class="kpi-label">NDVI Médio</div>
+          <div class="kpi-value">0.72</div>
+          <div class="kpi-trend trend-up">▲ +0.04 semana</div>
+          <div class="kpi-icon">🌿</div>
+        </div>
+        <div class="kpi-card" style="--accent-color: var(--accent-amber)">
+          <div class="kpi-label">Talhões Críticos</div>
+          <div class="kpi-value">2<span class="kpi-unit">/ 12</span></div>
+          <div class="kpi-trend trend-warn">⚠ Requer atenção</div>
+          <div class="kpi-icon">⚠️</div>
+        </div>
+      </div>
+
+      <!-- MAP + ALERTS -->
+      <div class="two-col">
+        <div class="talhao-map-wrap">
+          <div class="chart-header">
+            <div>
+              <div class="chart-title">Mapa dos Talhões</div>
+              <div class="chart-subtitle">Status em tempo real por área</div>
+            </div>
+            <span class="chart-badge badge-amber">4 Alertas</span>
+          </div>
+          <div class="talhao-grid-map" id="talhao-map"></div>
+          <div style="margin-top:14px;">
+            <div class="ndvi-legend">
+              <div class="ndvi-seg" style="background:#8B0000"></div>
+              <div class="ndvi-seg" style="background:#c0392b"></div>
+              <div class="ndvi-seg" style="background:#e67e22"></div>
+              <div class="ndvi-seg" style="background:#f1c40f"></div>
+              <div class="ndvi-seg" style="background:#a8d05a"></div>
+              <div class="ndvi-seg" style="background:#3aad5f"></div>
+              <div class="ndvi-seg" style="background:#1e7a3e"></div>
+            </div>
+            <div class="ndvi-labels">
+              <span>0.0</span><span>0.2</span><span>0.4</span><span>0.6</span><span>0.8+</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="chart-card">
+          <div class="chart-header">
+            <div>
+              <div class="chart-title">Alertas Ativos</div>
+              <div class="chart-subtitle">Ordenado por prioridade</div>
+            </div>
+          </div>
+          <div class="alerts-list" id="alerts-list"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ======================================= -->
+    <!-- OPERACIONAL: TALHÕES                    -->
+    <!-- ======================================= -->
+    <section class="page-section" id="op-talhoes">
+      <div class="section-header">
+        <div>
+          <div class="section-title">Talhões</div>
+          <div class="section-subtitle">Detalhamento por área cultivável</div>
+        </div>
+        <div class="date-badge">12 talhões monitorados</div>
+      </div>
+      <div class="talhao-list" id="talhao-list"></div>
+    </section>
+
+    <!-- ======================================= -->
+    <!-- OPERACIONAL: CÂMERAS                    -->
+    <!-- ======================================= -->
+    <section class="page-section" id="op-cameras">
+      <div class="section-header">
+        <div>
+          <div class="section-title">Câmeras de Monitoramento</div>
+          <div class="section-subtitle">Visão computacional · Detecção de anomalias visuais</div>
+        </div>
+        <span class="chart-badge badge-amber" style="font-size:12px; padding: 6px 14px;">2 Anomalias Detectadas</span>
+      </div>
+      <div class="camera-grid" id="camera-grid"></div>
+    </section>
+
+    <!-- ======================================= -->
+    <!-- OPERACIONAL: UMIDADE                    -->
+    <!-- ======================================= -->
+    <section class="page-section" id="op-umidade">
+      <div class="section-header">
+        <div>
+          <div class="section-title">Umidade Volumétrica do Solo</div>
+          <div class="section-subtitle">Sensores em malha · Atualização a cada 15 min</div>
+        </div>
+        <div class="date-badge">Faixa ideal: 30% – 70%</div>
+      </div>
+      <div class="gauge-grid" id="gauge-grid"></div>
+      <div class="chart-card">
+        <div class="chart-header">
+          <div>
+            <div class="chart-title">Histórico de Umidade por Talhão</div>
+            <div class="chart-subtitle">Últimas 24 horas · Média móvel</div>
+          </div>
+          <span class="chart-badge badge-blue">Sensores Ativos</span>
+        </div>
+        <div class="chart-container"><canvas id="umidadeChart"></canvas></div>
+        <div class="chart-legend" id="umidade-legend"></div>
+      </div>
+    </section>
+
+    <!-- ======================================= -->
+    <!-- GERENCIAL: VISÃO GERAL                  -->
+    <!-- ======================================= -->
+    <section class="page-section" id="ger-overview">
+      <div class="section-header">
+        <div>
+          <div class="section-title">Visão Geral Gerencial</div>
+          <div class="section-subtitle">Indicadores estratégicos · Período: 17/03 – 23/03/2026</div>
+        </div>
+        <div class="date-badge">Semana atual</div>
+      </div>
+
+      <div class="kpi-grid">
+        <div class="kpi-card" style="--accent-color: var(--accent-amber)">
+          <div class="kpi-label">Custo Energético</div>
+          <div class="kpi-value">R$42<span class="kpi-unit">/ha</span></div>
+          <div class="kpi-trend trend-up">▼ 8.5% vs período ant.</div>
+          <div class="kpi-icon">⚡</div>
+        </div>
+        <div class="kpi-card" style="--accent-color: var(--green-500)">
+          <div class="kpi-label">NDVI Médio</div>
+          <div class="kpi-value">0.72</div>
+          <div class="kpi-trend trend-up">Status: Bom</div>
+          <div class="kpi-icon">🌱</div>
+        </div>
+        <div class="kpi-card" style="--accent-color: var(--accent-blue)">
+          <div class="kpi-label">Água / Hectare</div>
+          <div class="kpi-value">6.4<span class="kpi-unit">m³</span></div>
+          <div class="kpi-trend trend-up">▼ 3.2% eficiência</div>
+          <div class="kpi-icon">💧</div>
+        </div>
+        <div class="kpi-card" style="--accent-color: var(--accent-teal)">
+          <div class="kpi-label">Anomalias (Resolv.)</div>
+          <div class="kpi-value">3<span class="kpi-unit">/ 6</span></div>
+          <div class="kpi-trend trend-warn">50% resolvidas</div>
+          <div class="kpi-icon">✅</div>
+        </div>
+      </div>
+
+      <div class="two-col">
+        <div class="chart-card">
+          <div class="chart-header">
+            <div>
+              <div class="chart-title">Energia Acumulada [kWh]</div>
+              <div class="chart-subtitle">Consumo total ao longo do tempo</div>
+            </div>
+            <span class="chart-badge badge-amber">1359 kWh total</span>
+          </div>
+          <div class="chart-container"><canvas id="energiaChart"></canvas></div>
+        </div>
+        <div class="chart-card">
+          <div class="chart-header">
+            <div>
+              <div class="chart-title">Índice de Eficiência Produtiva</div>
+              <div class="chart-subtitle">Insumo por cobertura vegetal / ha</div>
+            </div>
+            <span class="chart-badge badge-green">↑ Crescendo</span>
+          </div>
+          <div class="chart-container"><canvas id="eficienciaChart"></canvas></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ======================================= -->
+    <!-- GERENCIAL: ENERGIA                      -->
+    <!-- ======================================= -->
+    <section class="page-section" id="ger-energia">
+      <div class="section-header">
+        <div>
+          <div class="section-title">Eficiência Energética</div>
+          <div class="section-subtitle">Análise detalhada de consumo e potência</div>
+        </div>
+        <div class="energy-tabs">
+          <button class="etab active" onclick="switchEnergyTab('iluminacao', this)">Iluminação</button>
+          <button class="etab" onclick="switchEnergyTab('sistemas', this)">Sistemas</button>
+        </div>
+      </div>
+
+      <div class="kpi-grid" style="grid-template-columns: repeat(3,1fr);">
+        <div class="kpi-card" style="--accent-color: var(--accent-amber)">
+          <div class="kpi-label">Consumo Total</div>
+          <div class="kpi-value">1359<span class="kpi-unit">kWh</span></div>
+          <div class="kpi-trend trend-warn">Período semanal</div>
+          <div class="kpi-icon">🔌</div>
+        </div>
+        <div class="kpi-card" style="--accent-color: var(--accent-red)">
+          <div class="kpi-label">Desbalanc. Máx.</div>
+          <div class="kpi-value">127<span class="kpi-unit">W</span></div>
+          <div class="kpi-trend trend-down">⚠ Fase B–C</div>
+          <div class="kpi-icon">⚡</div>
+        </div>
+        <div class="kpi-card" style="--accent-color: var(--green-500)">
+          <div class="kpi-label">Fator Potência Méd.</div>
+          <div class="kpi-value">0.91</div>
+          <div class="kpi-trend trend-up">✓ Eficiente</div>
+          <div class="kpi-icon">📈</div>
+        </div>
+      </div>
+
+      <!-- Gráficos energéticos existentes -->
+      <div class="chart-card chart-full" style="margin-bottom:16px;">
+        <div class="chart-header">
+          <div>
+            <div class="chart-title">Fator de Potência ao Longo do Tempo</div>
+            <div class="chart-subtitle">Medição única de fator de potência</div>
+          </div>
+          <span class="chart-badge badge-green">Normal &gt; 0.85</span>
+        </div>
+        <div class="chart-container"><canvas id="fatorPotenciaChart"></canvas></div>
+        <div class="chart-legend">
+          <div class="legend-item"><div class="legend-dot" style="background:#52c278"></div>Fator de Potência</div>
+          <div class="legend-item"><div class="legend-dot" style="background:rgba(232,69,69,0.6); border: 1px dashed var(--accent-red);"></div>Limite mín. (0.85)</div>
+        </div>
+      </div>
+
+      <div class="charts-grid">
+        <div class="chart-card">
+          <div class="chart-header">
+            <div>
+              <div class="chart-title">Energia Acumulada [kWh]</div>
+              <div class="chart-subtitle">Consumo cumulativo no período</div>
+            </div>
+            <span class="chart-badge badge-amber" id="energia-tipo-badge">Iluminação</span>
+          </div>
+          <div class="chart-container"><canvas id="energiaAcumChart"></canvas></div>
+        </div>
+        <div class="chart-card">
+          <div class="chart-header">
+            <div>
+              <div class="chart-title">Desbalanceamento de Potência Ativa [W]</div>
+              <div class="chart-subtitle">Diferença entre fases · Limite: ±50 W</div>
+            </div>
+            <span class="chart-badge badge-red">Atenção</span>
+          </div>
+          <div class="chart-container"><canvas id="desbalanceChart"></canvas></div>
+        </div>
+      </div>
+
+      <!-- Consumo por setor -->
+      <div class="chart-card">
+        <div class="chart-header">
+          <div>
+            <div class="chart-title">Consumo por Setor</div>
+            <div class="chart-subtitle">Distribuição de energia por área</div>
+          </div>
+        </div>
+        <div class="setor-bars" id="setor-bars"></div>
+      </div>
+    </section>
+
+    <!-- ======================================= -->
+    <!-- GERENCIAL: SAÚDE LAVOURA                -->
+    <!-- ======================================= -->
+    <section class="page-section" id="ger-saude">
+      <div class="section-header">
+        <div>
+          <div class="section-title">Saúde da Lavoura</div>
+          <div class="section-subtitle">Índice de vigor vegetativo (NDVI) · Anomalias detectadas</div>
+        </div>
+        <div class="date-badge">23/03/2026</div>
+      </div>
+
+      <div class="talhao-map-wrap" style="margin-bottom:16px;">
+        <div class="chart-header">
+          <div>
+            <div class="chart-title">Mapa NDVI por Talhão</div>
+            <div class="chart-subtitle">Escala de vigor vegetativo simulado</div>
+          </div>
+        </div>
+        <div class="talhao-grid-map" id="talhao-map-saude"></div>
+        <div style="margin-top:14px;">
+          <div class="ndvi-legend">
+            <div class="ndvi-seg" style="background:#8B0000"></div>
+            <div class="ndvi-seg" style="background:#c0392b"></div>
+            <div class="ndvi-seg" style="background:#e67e22"></div>
+            <div class="ndvi-seg" style="background:#f1c40f"></div>
+            <div class="ndvi-seg" style="background:#a8d05a"></div>
+            <div class="ndvi-seg" style="background:#3aad5f"></div>
+            <div class="ndvi-seg" style="background:#1e7a3e"></div>
+          </div>
+          <div class="ndvi-labels">
+            <span>0.0</span><span>0.2</span><span>0.4</span><span>0.6</span><span>0.8+</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="chart-card">
+        <div class="chart-header">
+          <div>
+            <div class="chart-title">Anomalias Detectadas</div>
+            <div class="chart-subtitle">Ordenado por data · Classificado por status</div>
+          </div>
+        </div>
+        <div class="alerts-list" id="anomalias-list"></div>
+        <div class="anomaly-summary">
+          <div class="anomaly-count">
+            <div class="ac-num" style="color:var(--accent-red)">2</div>
+            <div class="ac-lbl">Abertas</div>
+          </div>
+          <div class="anomaly-count">
+            <div class="ac-num" style="color:var(--accent-amber)">1</div>
+            <div class="ac-lbl">Em Andamento</div>
+          </div>
+          <div class="anomaly-count">
+            <div class="ac-num" style="color:var(--green-400)">3</div>
+            <div class="ac-lbl">Resolvidas</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ======================================= -->
+    <!-- OPERACIONAL: DETALHE DO TALHÃO          -->
+    <!-- ======================================= -->
+    <section class="page-section" id="op-talhao-detail">
+      <button class="detail-back-btn" onclick="goToSection('op-talhoes', null); highlightNav('op-talhoes')">
+        ← Voltar para Talhões
+      </button>
+
+      <div class="detail-hero" id="detail-hero">
+        <div>
+          <div class="detail-hero-title" id="detail-title">Talhão —</div>
+          <div id="detail-status-banner" class="detail-status-banner banner-ok">✓ Normal</div>
+          <div class="detail-meta" id="detail-meta"></div>
+        </div>
+        <div>
+          <div class="detail-kpis" id="detail-kpis"></div>
+        </div>
+      </div>
+
+      <!-- Problema + Ação Sugerida + Registrar -->
+      <div class="action-card" id="detail-action-card">
+        <div class="action-card-title">⚠️ Problema Identificado</div>
+        <div class="action-problem" id="detail-problem">—</div>
+        <div class="action-card-title" style="margin-top:12px;">🔧 Ação Sugerida</div>
+        <div class="action-suggestion" id="detail-action">—</div>
+        <button class="register-btn" onclick="registerIntervention()">✅ Registrar Intervenção</button>
+        <div class="upload-success" id="reg-success">✅ Intervenção registrada com sucesso!</div>
+      </div>
+
+      <!-- Gráficos energéticos -->
+      <div class="chart-card chart-full" style="margin-bottom:16px;">
+        <div class="chart-header">
+          <div>
+            <div class="chart-title">Fator de Potência</div>
+            <div class="chart-subtitle">Medição de fator de potência ao longo do tempo</div>
+          </div>
+          <span class="chart-badge badge-green">Normal &gt; 0.85</span>
+        </div>
+        <div class="chart-container"><canvas id="det-fatorPotencia"></canvas></div>
+        <div class="chart-legend">
+          <div class="legend-item"><div class="legend-dot" style="background:#52c278"></div>Fator de Potência</div>
+          <div class="legend-item"><div class="legend-dot" style="background:rgba(232,69,69,0.5); border: 1px dashed var(--accent-red);"></div>Limite mín. (0.85)</div>
+        </div>
+      </div>
+
+      <div class="charts-grid" style="margin-bottom:16px;">
+        <div class="chart-card">
+          <div class="chart-header">
+            <div>
+              <div class="chart-title">Energia Acumulada [kWh]</div>
+              <div class="chart-subtitle">Consumo cumulativo no período</div>
+            </div>
+            <span class="chart-badge badge-amber" id="det-energia-badge">—</span>
+          </div>
+          <div class="chart-container"><canvas id="det-energiaAcum"></canvas></div>
+        </div>
+        <div class="chart-card">
+          <div class="chart-header">
+            <div>
+              <div class="chart-title">Desbalanceamento de Potência Ativa [W]</div>
+              <div class="chart-subtitle">Diferença entre fases · Limite: ±50 W</div>
+            </div>
+            <span class="chart-badge badge-red">Monitorar</span>
+          </div>
+          <div class="chart-container"><canvas id="det-desbalance"></canvas></div>
+        </div>
+      </div>
+
+      <!-- Umidade -->
+      <div class="chart-card" style="margin-bottom:16px;">
+        <div class="chart-header">
+          <div>
+            <div class="chart-title">Umidade Volumétrica do Solo</div>
+            <div class="chart-subtitle">Histórico 24h · Faixa ideal: 30%–70%</div>
+          </div>
+          <span class="chart-badge badge-blue" id="det-umidade-badge">—</span>
+        </div>
+        <div class="chart-container"><canvas id="det-umidade"></canvas></div>
+      </div>
+
+      <!-- Camera + histórico -->
+      <div class="two-col">
+        <div class="chart-card">
+          <div class="chart-header">
+            <div>
+              <div class="chart-title">Câmera de Monitoramento</div>
+              <div class="chart-subtitle" id="det-cam-sub">Visão computacional</div>
+            </div>
+            <span class="chart-badge" id="det-cam-badge">—</span>
+          </div>
+          <div class="camera-feed" style="border-radius:10px; overflow:hidden;">
+            <canvas class="plant-canvas" id="det-cam-canvas"></canvas>
+            <div class="cam-overlay">
+              <div class="cam-top">
+                <span class="cam-badge cam-live" id="det-cam-status-badge">● AO VIVO</span>
+                <span class="cam-ndvi-badge" id="det-cam-ndvi">NDVI —</span>
+              </div>
+              <div class="cam-bottom">
+                <div class="cam-name" id="det-cam-name">—</div>
+                <div class="cam-sub" id="det-cam-anomaly">—</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="chart-card">
+          <div class="chart-header">
+            <div>
+              <div class="chart-title">Histórico de Intervenções</div>
+              <div class="chart-subtitle" id="det-hist-sub">Registros do talhão</div>
+            </div>
+          </div>
+          <div class="intervention-history" id="det-interventions"></div>
+        </div>
+      </div>
+    </section>
+
+  </main><!-- /main-content -->
+
+  <!-- ======================================= -->
+  <!-- UPLOAD MODAL                            -->
+  <!-- ======================================= -->
+  <div class="upload-modal-overlay" id="upload-modal-overlay">
+    <div class="upload-modal">
+      <button class="modal-close" onclick="closeUploadModal()">✕</button>
+      <div class="modal-title">📂 Importar Dados Reais</div>
+      <div class="modal-subtitle">Carregue seus arquivos CSV ou JSON para substituir os dados simulados nos gráficos</div>
+
+      <div class="upload-tabs">
+        <button class="utab active" onclick="switchUploadTab('energia', this)">⚡ Energia</button>
+        <button class="utab" onclick="switchUploadTab('umidade', this)">💧 Umidade</button>
+        <button class="utab" onclick="switchUploadTab('ndvi', this)">🌿 NDVI / Talhões</button>
+      </div>
+
+      <!-- ENERGIA PANEL -->
+      <div class="upload-panel active" id="upanel-energia">
+        <div class="schema-hint">
+          <strong>Colunas esperadas no CSV:</strong><br>
+          <code>timestamp</code> — data/hora da medição (ex: <code>2026-03-23 08:00</code>)<br>
+          <code>fator_a</code>, <code>fator_b</code>, <code>fator_c</code> — fator de potência por fase (0–1)<br>
+          <code>energia_kwh</code> — energia acumulada em kWh<br>
+          <code>desbal_ab</code>, <code>desbal_bc</code> — desbalanceamento de potência ativa (W)<br>
+          <strong>Mapeamento flexível:</strong> se seus cabeçalhos forem diferentes, use os seletores abaixo.
+        </div>
+        <div class="drop-zone" id="dz-energia" onclick="document.getElementById('fi-energia').click()">
+          <input type="file" id="fi-energia" accept=".csv,.json" onchange="handleFile('energia', this)">
+          <div class="drop-zone-icon">📊</div>
+          <div class="drop-zone-title">Arraste ou clique para selecionar</div>
+          <div class="drop-zone-sub">CSV ou JSON · Dados energéticos</div>
+        </div>
+        <div class="upload-preview" id="prev-energia"></div>
+        <div class="field-mapper" id="mapper-energia">
+          <div style="font-family:var(--font-mono);font-size:11px;color:var(--text-muted);margin-bottom:4px;">MAPEAR COLUNAS DO ARQUIVO → CAMPOS DO SISTEMA</div>
+          <div class="mapper-row">
+            <div class="mapper-label">timestamp</div>
+            <div class="mapper-arrow">→</div>
+            <select class="mapper-select" id="map-energia-ts"><option value="">Selecione...</option></select>
+          </div>
+          <div class="mapper-row">
+            <div class="mapper-label">fator_a (Fase A)</div>
+            <div class="mapper-arrow">→</div>
+            <select class="mapper-select" id="map-energia-fa"><option value="">Selecione...</option></select>
+          </div>
+          <div class="mapper-row">
+            <div class="mapper-label">fator_b (Fase B)</div>
+            <div class="mapper-arrow">→</div>
+            <select class="mapper-select" id="map-energia-fb"><option value="">Selecione...</option></select>
+          </div>
+          <div class="mapper-row">
+            <div class="mapper-label">fator_c (Fase C)</div>
+            <div class="mapper-arrow">→</div>
+            <select class="mapper-select" id="map-energia-fc"><option value="">Selecione...</option></select>
+          </div>
+          <div class="mapper-row">
+            <div class="mapper-label">energia_kwh</div>
+            <div class="mapper-arrow">→</div>
+            <select class="mapper-select" id="map-energia-kwh"><option value="">Selecione...</option></select>
+          </div>
+          <div class="mapper-row">
+            <div class="mapper-label">desbal_ab (W)</div>
+            <div class="mapper-arrow">→</div>
+            <select class="mapper-select" id="map-energia-dab"><option value="">Selecione...</option></select>
+          </div>
+          <div class="mapper-row">
+            <div class="mapper-label">desbal_bc (W)</div>
+            <div class="mapper-arrow">→</div>
+            <select class="mapper-select" id="map-energia-dbc"><option value="">Selecione...</option></select>
+          </div>
+        </div>
+        <button class="upload-apply-btn" id="apply-energia" disabled onclick="applyData('energia')">Aplicar Dados de Energia</button>
+        <div class="upload-success" id="succ-energia">✅ Dados de energia aplicados com sucesso!</div>
+      </div>
+
+      <!-- UMIDADE PANEL -->
+      <div class="upload-panel" id="upanel-umidade">
+        <div class="schema-hint">
+          <strong>Colunas esperadas no CSV:</strong><br>
+          <code>timestamp</code> — data/hora da medição<br>
+          <code>talhao</code> — identificador do talhão (ex: <code>A1</code>, <code>D2</code>)<br>
+          <code>umidade</code> — umidade volumétrica do solo (%) — valor de 0 a 100<br>
+          <strong>Aceita também</strong> colunas separadas por talhão: <code>umidade_A1</code>, <code>umidade_D2</code>, etc.
+        </div>
+        <div class="drop-zone" id="dz-umidade" onclick="document.getElementById('fi-umidade').click()">
+          <input type="file" id="fi-umidade" accept=".csv,.json" onchange="handleFile('umidade', this)">
+          <div class="drop-zone-icon">💧</div>
+          <div class="drop-zone-title">Arraste ou clique para selecionar</div>
+          <div class="drop-zone-sub">CSV ou JSON · Dados de umidade do solo</div>
+        </div>
+        <div class="upload-preview" id="prev-umidade"></div>
+        <div class="field-mapper" id="mapper-umidade">
+          <div style="font-family:var(--font-mono);font-size:11px;color:var(--text-muted);margin-bottom:4px;">MAPEAR COLUNAS → CAMPOS</div>
+          <div class="mapper-row">
+            <div class="mapper-label">timestamp</div>
+            <div class="mapper-arrow">→</div>
+            <select class="mapper-select" id="map-umidade-ts"><option value="">Selecione...</option></select>
+          </div>
+          <div class="mapper-row">
+            <div class="mapper-label">umidade (%)</div>
+            <div class="mapper-arrow">→</div>
+            <select class="mapper-select" id="map-umidade-val"><option value="">Selecione...</option></select>
+          </div>
+          <div class="mapper-row">
+            <div class="mapper-label">talhao (ID)</div>
+            <div class="mapper-arrow">→</div>
+            <select class="mapper-select" id="map-umidade-talhao"><option value="">Selecione...</option></select>
+          </div>
+        </div>
+        <button class="upload-apply-btn" id="apply-umidade" disabled onclick="applyData('umidade')">Aplicar Dados de Umidade</button>
+        <div class="upload-success" id="succ-umidade">✅ Dados de umidade aplicados com sucesso!</div>
+      </div>
+
+      <!-- NDVI PANEL -->
+      <div class="upload-panel" id="upanel-ndvi">
+        <div class="schema-hint">
+          <strong>Colunas esperadas no CSV:</strong><br>
+          <code>talhao</code> — ID do talhão (ex: <code>A1</code>)<br>
+          <code>ndvi</code> — índice NDVI (0.0 a 1.0)<br>
+          <code>status</code> — <code>ok</code>, <code>warn</code> ou <code>crit</code> (opcional)<br>
+          <code>umidade</code> — umidade média do talhão (%) (opcional)<br>
+          <code>energia_kwh</code> — consumo energético do talhão (opcional)<br>
+          <code>cultura</code> — tipo de cultura (opcional)
+        </div>
+        <div class="drop-zone" id="dz-ndvi" onclick="document.getElementById('fi-ndvi').click()">
+          <input type="file" id="fi-ndvi" accept=".csv,.json" onchange="handleFile('ndvi', this)">
+          <div class="drop-zone-icon">🌿</div>
+          <div class="drop-zone-title">Arraste ou clique para selecionar</div>
+          <div class="drop-zone-sub">CSV ou JSON · Dados de talhões e NDVI</div>
+        </div>
+        <div class="upload-preview" id="prev-ndvi"></div>
+        <div class="field-mapper" id="mapper-ndvi">
+          <div style="font-family:var(--font-mono);font-size:11px;color:var(--text-muted);margin-bottom:4px;">MAPEAR COLUNAS → CAMPOS</div>
+          <div class="mapper-row">
+            <div class="mapper-label">talhao (ID)</div>
+            <div class="mapper-arrow">→</div>
+            <select class="mapper-select" id="map-ndvi-id"><option value="">Selecione...</option></select>
+          </div>
+          <div class="mapper-row">
+            <div class="mapper-label">ndvi</div>
+            <div class="mapper-arrow">→</div>
+            <select class="mapper-select" id="map-ndvi-val"><option value="">Selecione...</option></select>
+          </div>
+          <div class="mapper-row">
+            <div class="mapper-label">umidade (%)</div>
+            <div class="mapper-arrow">→</div>
+            <select class="mapper-select" id="map-ndvi-um"><option value="">Selecione...</option></select>
+          </div>
+          <div class="mapper-row">
+            <div class="mapper-label">energia_kwh</div>
+            <div class="mapper-arrow">→</div>
+            <select class="mapper-select" id="map-ndvi-en"><option value="">Selecione...</option></select>
+          </div>
+        </div>
+        <button class="upload-apply-btn" id="apply-ndvi" disabled onclick="applyData('ndvi')">Aplicar Dados dos Talhões</button>
+        <div class="upload-success" id="succ-ndvi">✅ Dados dos talhões aplicados com sucesso!</div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- MOBILE NAV -->
+  <nav class="mobile-nav">
+    <div class="mob-nav-item active" data-view="operacional" onclick="goToSectionMob('op-overview', this)">
+      <span class="m-icon">🗺️</span>Geral
+    </div>
+    <div class="mob-nav-item" data-view="gerencial" onclick="goToSectionMob('ger-overview', this)">
+      <span class="m-icon">📊</span>Gerencial
+    </div>
+    <div class="mob-nav-item" data-view="operacional" onclick="goToSectionMob('op-talhoes', this)">
+      <span class="m-icon">🌾</span>Talhões
+    </div>
+    <div class="mob-nav-item" data-view="operacional" onclick="goToSectionMob('op-cameras', this)">
+      <span class="m-icon">📷</span>Câmeras
+    </div>
+    <div class="mob-nav-item" data-view="operacional" onclick="goToSectionMob('op-umidade', this)">
+      <span class="m-icon">💧</span>Solo
+    </div>
+    <div class="mob-nav-item" data-view="gerencial" onclick="goToSectionMob('ger-energia', this)">
+      <span class="m-icon">⚡</span>Energia
+    </div>
+  </nav>
+
+</div><!-- /app-shell -->
+<script type="module" src="/src/main.ts"></script>
+</body>
+</html>

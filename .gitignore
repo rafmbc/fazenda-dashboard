@@ -1,0 +1,6 @@
+data/
+frontend/node_modules
+*.pyc
+.env
+.vscode
+!.vscode/settings.json
