@@ -4,8 +4,6 @@ import { initCharts } from '../charts/index.js';
 // ============================================================
 // SECTION NAVIGATION
 // ============================================================
-let currentSection = 'op-overview';
-let currentView = 'operacional';
 const LAYOUT_STORAGE_KEY = 'fazenda-layout-mode';
 
 function applyLayoutMode(mode: 'desktop' | 'mobile'): void {
@@ -30,7 +28,6 @@ export function initLayoutPreference(): void {
 export function goToSection(id: string, clickedEl: HTMLElement | null): void {
   document.querySelectorAll<HTMLElement>('.page-section').forEach(s => s.classList.remove('active'));
   document.getElementById(id)?.classList.add('active');
-  currentSection = id;
 
   document.querySelectorAll<HTMLElement>('.nav-item').forEach(n => n.classList.remove('active'));
   if (clickedEl) clickedEl.classList.add('active');
@@ -58,8 +55,6 @@ export function highlightNav(sectionId: string): void {
 export function switchView(view: string, btn: HTMLElement): void {
   document.querySelectorAll<HTMLElement>('.view-btn').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
-
-  currentView = view;
   
   // Hide/show nav items based on view
   document.querySelectorAll<HTMLElement>('[data-view]').forEach(el => {

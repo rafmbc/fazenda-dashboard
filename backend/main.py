@@ -15,6 +15,32 @@ app.add_middleware(
 FILE_PATH = "../data/DF_LIMPO.csv"
 
 
+def sample_evenly(records: list[dict], limit: int) -> list[dict]:
+    """Return up to `limit` points spread across the full timeline."""
+    if limit <= 0 or len(records) <= limit:
+        return records
+
+    if limit == 1:
+        return [records[-1]]
+
+    last_idx = len(records) - 1
+    step = last_idx / (limit - 1)
+    sampled_idx = []
+    seen = set()
+
+    for i in range(limit):
+        idx = round(i * step)
+        if idx in seen:
+            continue
+        seen.add(idx)
+        sampled_idx.append(idx)
+
+    if sampled_idx[-1] != last_idx:
+        sampled_idx[-1] = last_idx
+
+    return [records[i] for i in sampled_idx]
+
+
 def parse_datetime(value: str) -> pd.Timestamp:
     """Parse string parameters to pandas timestamps and validate ordering."""
     try:
@@ -57,7 +83,8 @@ def get_data(
             filtered.sort_values("Timestamp", inplace=True)
             results.extend(filtered.to_dict(orient="records"))
 
-        if len(results) >= limit:
-            break
+    if not results:
+        return []
 
-    return results[:limit]
+    results.sort(key=lambda row: row["Timestamp"])
+    return sample_evenly(results, limit)

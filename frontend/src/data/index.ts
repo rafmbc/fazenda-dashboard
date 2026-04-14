@@ -73,9 +73,10 @@ export async function fetchSensorData(start?: string, end?: string): Promise<Sen
     start: start || DEFAULT_START,
     end: end || DEFAULT_END,
   });
+  params.set('_ts', String(Date.now()));
   const url = `${API_BASE_URL}?${params.toString()}`;
   try {
-    const response = await fetch(url);
+    const response = await fetch(url, { cache: 'no-store' });
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
     }
@@ -90,8 +91,10 @@ export async function fetchSensorData(start?: string, end?: string): Promise<Sen
 export async function updateTalhoesFromAPI(start?: string, end?: string): Promise<void> {
   const data = await fetchSensorData(start, end);
   if (data.length === 0) {
-    // No data returned, preserve existing talhões and keep the current dataset.
-    console.warn('No sensor data available; keeping existing talhões.');
+    // No data in selected range: clear runtime data so charts/lists reflect the filter.
+    console.warn('No sensor data available for selected period; clearing runtime dataset.');
+    sensorData = [];
+    talhoes.length = 0;
     return;
   }
 
@@ -143,31 +146,48 @@ export function getHumidityTimeSeries(talhaoId: string): { labels: string[]; dat
 
 export function getAllHumidityTimeSeries(
   talhaoIds: string[] = ['A1', 'B2', 'C3', 'D4', 'E5']
-): { labels: string[]; series: Record<string, number[]> } {
+): { labels: string[]; series: Record<string, number[]>; timestamps: number[] } {
   if (sensorData.length === 0) {
-    return { labels: [], series: Object.fromEntries(talhaoIds.map(id => [id, []])) };
+    return { labels: [], series: Object.fromEntries(talhaoIds.map(id => [id, []])), timestamps: [] };
   }
 
-  const ordered = sortSensorReadings(sensorData);
-  const labels = ordered.map(reading => {
+  const aggregated = new Map<number, Record<string, { sum: number; count: number }>>();
+
+  sortSensorReadings(sensorData).forEach(reading => {
     const ms = toTimestampMs(reading.Timestamp);
-    return formatTimeLabel(ms, false);
+    const row = aggregated.get(ms) ?? {};
+
+    talhaoIds.forEach(id => {
+      const humidityKey = `Humidity ${id} [%]` as keyof SensorData;
+      const val = reading[humidityKey];
+      if (typeof val !== 'number' || Number.isNaN(val)) return;
+      const current = row[id] ?? { sum: 0, count: 0 };
+      current.sum += val;
+      current.count += 1;
+      row[id] = current;
+    });
+
+    aggregated.set(ms, row);
   });
+
+  const timestamps = Array.from(aggregated.keys()).sort((a, b) => a - b);
+  const labels = timestamps.map((ms, idx) => formatChartLabel(ms, timestamps, idx, false));
 
   const series: Record<string, number[]> = {};
   talhaoIds.forEach(id => {
-    const humidityKey = `Humidity ${id} [%]` as keyof SensorData;
-    series[id] = ordered.map(reading => {
-      const val = reading[humidityKey];
-      return typeof val === 'number' && !Number.isNaN(val) ? parseFloat(val.toFixed(2)) : NaN;
+    series[id] = timestamps.map(ms => {
+      const row = aggregated.get(ms);
+      const entry = row?.[id];
+      if (!entry || entry.count === 0) return NaN;
+      return parseFloat((entry.sum / entry.count).toFixed(2));
     });
   });
 
-  return { labels, series };
+  return { labels, series, timestamps };
 }
 
-export function getEnergyAccumulativeTimeSeries(): { labels: string[]; data: number[] } {
-  if (sensorData.length === 0) return { labels: [], data: [] };
+export function getEnergyAccumulativeTimeSeries(): { labels: string[]; data: number[]; timestamps: number[] } {
+  if (sensorData.length === 0) return { labels: [], data: [], timestamps: [] };
 
   const aggregated = new Map<number, number>();
   sortSensorReadings(sensorData).forEach(reading => {
@@ -178,9 +198,17 @@ export function getEnergyAccumulativeTimeSeries(): { labels: string[]; data: num
   });
 
   const times = Array.from(aggregated.keys()).sort((a, b) => a - b);
+  if (times.length === 0) return { labels: [], data: [], timestamps: [] };
+
+  // Normalize cumulative energy to the selected period so the chart starts at ~0.
+  const baseline = aggregated.get(times[0]) ?? 0;
   return {
-    labels: times.map(ms => formatTimeLabel(ms)),
-    data: times.map(ms => aggregated.get(ms) ?? 0),
+    labels: times.map((ms, idx) => formatChartLabel(ms, times, idx)),
+    timestamps: times,
+    data: times.map(ms => {
+      const value = (aggregated.get(ms) ?? 0) - baseline;
+      return parseFloat(Math.max(value, 0).toFixed(6));
+    }),
   };
 }
 
@@ -192,24 +220,31 @@ export function getEnergyKwhTimeSeries(): { labels: string[]; data: number[] } {
 export function getWeeklyEnergyData(): { labels: string[]; data: number[] } {
   if (sensorData.length === 0) return { labels: [], data: [] };
 
-  const dayNames = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sab'];
-  const dailyTotals = new Map<string, { label: string; value: number; time: number }>();
+  const accum = getEnergyAccumulativeTimeSeries();
+  if (accum.timestamps.length === 0) return { labels: [], data: [] };
 
-  sortSensorReadings(sensorData).forEach(reading => {
-    const date = new Date(reading.Timestamp);
-    const dayKey = date.toISOString().split('T')[0]; // YYYY-MM-DD
-    const dayName = dayNames[date.getDay()];
-    const label = `${dayName} ${dayKey}`;
-    dailyTotals.set(dayKey, { label, value: reading.Energy_kWh_cum || 0, time: date.getTime() });
+  const dayNames = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sab'];
+  const dailyMax = new Map<string, { label: string; value: number; time: number }>();
+
+  accum.timestamps.forEach((ts, idx) => {
+    const date = new Date(ts);
+    const dayKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+    const dayLabel = `${dayNames[date.getDay()]} ${String(date.getDate()).padStart(2, '0')}/${String(date.getMonth() + 1).padStart(2, '0')}`;
+    const value = accum.data[idx] ?? 0;
+    const current = dailyMax.get(dayKey);
+
+    if (!current || value > current.value) {
+      dailyMax.set(dayKey, { label: dayLabel, value, time: ts });
+    }
   });
 
-  const lastSeven = Array.from(dailyTotals.values())
+  const lastSeven = Array.from(dailyMax.values())
     .sort((a, b) => a.time - b.time)
     .slice(-7);
 
   return {
     labels: lastSeven.map(item => item.label),
-    data: lastSeven.map(item => item.value),
+    data: lastSeven.map(item => parseFloat(Math.max(item.value, 0).toFixed(6))),
   };
 }
 
@@ -228,6 +263,63 @@ export function getWeeklyTotalEnergyWh(): number {
 export function getPowerFactorTimeSeries(): { labels: string[]; data: number[] } {
   if (sensorData.length === 0) return { labels: [], data: [] };
   return buildAverageSeries(reading => reading.PowerFactor, { decimals: 3 });
+}
+
+export function getPowerImbalanceTimeSeries(): { labels: string[]; timestamps: number[]; ab: number[]; bc: number[] } {
+  if (sensorData.length === 0) return { labels: [], timestamps: [], ab: [], bc: [] };
+
+  const grouped = new Map<number, Map<string, { sum: number; count: number }>>();
+  sortSensorReadings(sensorData).forEach(reading => {
+    const ms = toTimestampMs(reading.Timestamp);
+    const channel = String(reading.Channel ?? '').trim();
+    const p = reading['ActivePower [W]'];
+    if (!channel || typeof p !== 'number' || Number.isNaN(p)) return;
+
+    const byChannel = grouped.get(ms) ?? new Map<string, { sum: number; count: number }>();
+    const current = byChannel.get(channel) ?? { sum: 0, count: 0 };
+    current.sum += p;
+    current.count += 1;
+    byChannel.set(channel, current);
+    grouped.set(ms, byChannel);
+  });
+
+  const timestamps = Array.from(grouped.keys()).sort((a, b) => a - b);
+  if (timestamps.length === 0) return { labels: [], timestamps: [], ab: [], bc: [] };
+
+  const parseOrder = (name: string): number => {
+    const match = name.match(/(\d+)/);
+    return match ? Number(match[1]) : Number.MAX_SAFE_INTEGER;
+  };
+
+  const ab: number[] = [];
+  const bc: number[] = [];
+
+  timestamps.forEach(ms => {
+    const byChannel = grouped.get(ms)!;
+    const orderedChannels = Array.from(byChannel.keys())
+      .sort((a, b) => parseOrder(a) - parseOrder(b) || a.localeCompare(b));
+
+    const avg = (channel: string | undefined): number | null => {
+      if (!channel) return null;
+      const entry = byChannel.get(channel);
+      if (!entry || entry.count === 0) return null;
+      return entry.sum / entry.count;
+    };
+
+    const p1 = avg(orderedChannels[0]);
+    const p2 = avg(orderedChannels[1]);
+    const p3 = avg(orderedChannels[2]);
+
+    ab.push(p1 != null && p2 != null ? parseFloat((p1 - p2).toFixed(2)) : NaN);
+    bc.push(p2 != null && p3 != null ? parseFloat((p2 - p3).toFixed(2)) : NaN);
+  });
+
+  return {
+    labels: timestamps.map((ms, idx) => formatChartLabel(ms, timestamps, idx, false)),
+    timestamps,
+    ab,
+    bc,
+  };
 }
 
 export function getAveragePowerFactor(): number {
@@ -328,6 +420,30 @@ function formatTimeLabel(ms: number, includeSeconds = true): string {
   return new Date(ms).toLocaleTimeString('pt-BR', includeSeconds ? TIME_WITH_SECONDS : TIME_NO_SECONDS);
 }
 
+function formatDateTimeLabel(ms: number, includeSeconds = true): string {
+  const date = new Date(ms).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+  return `${date} ${formatTimeLabel(ms, includeSeconds)}`;
+}
+
+function formatChartLabel(ms: number, allTimes: number[], index: number, includeSeconds = true): string {
+  if (allTimes.length <= 1) return formatTimeLabel(ms, includeSeconds);
+
+  const spanMs = allTimes[allTimes.length - 1] - allTimes[0];
+  const oneDayMs = 24 * 60 * 60 * 1000;
+  const currentDay = new Date(ms).toDateString();
+  const prevDay = index > 0 ? new Date(allTimes[index - 1]).toDateString() : currentDay;
+
+  // If there are multiple days in range, include date on day boundaries and at regular checkpoints.
+  if (spanMs >= oneDayMs) {
+    if (index === 0 || currentDay !== prevDay || index % 12 === 0) {
+      return formatDateTimeLabel(ms, false);
+    }
+    return formatTimeLabel(ms, false);
+  }
+
+  return formatTimeLabel(ms, includeSeconds);
+}
+
 interface AverageSeriesOptions {
   decimals?: number;
   includeSeconds?: boolean;
@@ -353,7 +469,7 @@ function buildAverageSeries(
 
   const times = Array.from(aggregated.keys()).sort((a, b) => a - b);
   return {
-    labels: times.map(ms => formatTimeLabel(ms, includeSeconds)),
+    labels: times.map((ms, idx) => formatChartLabel(ms, times, idx, includeSeconds)),
     data: times.map(ms => {
       const entry = aggregated.get(ms)!;
       const avg = entry.sum / entry.count || 0;
@@ -374,7 +490,7 @@ function buildSumSeries(accessor: (reading: SensorData) => number | undefined): 
 
   const times = Array.from(aggregated.keys()).sort((a, b) => a - b);
   return {
-    labels: times.map(ms => formatTimeLabel(ms)),
+    labels: times.map((ms, idx) => formatChartLabel(ms, times, idx)),
     data: times.map(ms => parseFloat((aggregated.get(ms) ?? 0).toFixed(4))),
   };
 }

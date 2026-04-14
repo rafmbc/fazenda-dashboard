@@ -36,7 +36,7 @@
         <input type="datetime-local" id="start-date" value="2025-12-01T19:20:42" step="1" title="Data de Início">
         <span>até</span>
         <input type="datetime-local" id="end-date" value="2025-12-27T16:18:41" step="1" title="Data de Fim">
-        <button onclick="fetchData()" title="Buscar Dados">🔍</button>
+        <button id="fetch-data-btn" type="button" onclick="fetchData()" title="Buscar Dados">🔍</button>
       </div>
       <button class="ctrl-btn layout-btn" onclick="toggleLayout()" title="Ativar visão para celular" id="layout-btn" aria-label="Alternar visão para celular" aria-pressed="false">📱</button>
       <button class="ctrl-btn" onclick="toggleTheme()" title="Alternar tema" id="theme-btn">🌙</button>
@@ -325,12 +325,12 @@
             <div class="chart-title">Fator de Potência ao Longo do Tempo</div>
             <div class="chart-subtitle">Medição única de fator de potência</div>
           </div>
-          <span class="chart-badge badge-green">Normal &gt; 0.85</span>
+          <span class="chart-badge badge-green">Normal &gt; 0.92</span>
         </div>
         <div class="chart-container"><canvas id="fatorPotenciaChart"></canvas></div>
         <div class="chart-legend">
           <div class="legend-item"><div class="legend-dot" style="background:#52c278"></div>Fator de Potência</div>
-          <div class="legend-item"><div class="legend-dot" style="background:rgba(232,69,69,0.6); border: 1px dashed var(--accent-red);"></div>Limite mín. (0.85)</div>
+          <div class="legend-item"><div class="legend-dot" style="background:rgba(232,69,69,0.6); border: 1px dashed var(--accent-red);"></div>Linha de referência (0.92)</div>
         </div>
       </div>
 
@@ -480,12 +480,12 @@
             <div class="chart-title">Fator de Potência</div>
             <div class="chart-subtitle">Medição de fator de potência ao longo do tempo</div>
           </div>
-          <span class="chart-badge badge-green">Normal &gt; 0.85</span>
+          <span class="chart-badge badge-green">Normal &gt; 0.92</span>
         </div>
         <div class="chart-container"><canvas id="det-fatorPotencia"></canvas></div>
         <div class="chart-legend">
           <div class="legend-item"><div class="legend-dot" style="background:#52c278"></div>Fator de Potência</div>
-          <div class="legend-item"><div class="legend-dot" style="background:rgba(232,69,69,0.5); border: 1px dashed var(--accent-red);"></div>Limite mín. (0.85)</div>
+          <div class="legend-item"><div class="legend-dot" style="background:rgba(232,69,69,0.5); border: 1px dashed var(--accent-red);"></div>Linha de referência (0.92)</div>
         </div>
       </div>
 
@@ -725,26 +725,21 @@
 
   <!-- MOBILE NAV -->
   <nav class="mobile-nav">
-    <div class="mob-nav-item active" data-view="operacional" onclick="goToSectionMob('op-overview', this)">
-      <span class="m-icon">🗺️</span>Geral
+    <div class="mob-nav-item active" onclick="goToSectionMob('ger-overview', this)">
+      <span class="m-icon">📊</span>
+      <span class="mob-nav-label">Visão Geral</span>
     </div>
-    <div class="mob-nav-item" data-view="gerencial" onclick="goToSectionMob('ger-overview', this)">
-      <span class="m-icon">📊</span>Gerencial
+    <div class="mob-nav-item" onclick="goToSectionMob('ger-energia', this)">
+      <span class="m-icon">⚡</span>
+      <span class="mob-nav-label">Energia</span>
     </div>
-    <div class="mob-nav-item" data-view="operacional" onclick="goToSectionMob('op-talhoes', this)">
-      <span class="m-icon">🌾</span>Talhões
+    <div class="mob-nav-item" onclick="goToSectionMob('ger-talhoes', this)">
+      <span class="m-icon">🌾</span>
+      <span class="mob-nav-label">Talhões</span>
     </div>
-    <div class="mob-nav-item" data-view="operacional" onclick="goToSectionMob('op-cameras', this)">
-      <span class="m-icon">📷</span>Câmeras
-    </div>
-    <div class="mob-nav-item" data-view="operacional" onclick="goToSectionMob('op-umidade', this)">
-      <span class="m-icon">💧</span>Solo
-    </div>
-    <div class="mob-nav-item" data-view="gerencial" onclick="goToSectionMob('ger-energia', this)">
-      <span class="m-icon">⚡</span>Energia
-    </div>
-    <div class="mob-nav-item" data-view="gerencial" onclick="goToSectionMob('ger-talhoes', this)">
-      <span class="m-icon">🌾</span>Talhões
+    <div class="mob-nav-item" onclick="goToSectionMob('ger-saude', this)">
+      <span class="m-icon">🌿</span>
+      <span class="mob-nav-label">Saúde na Lavoura</span>
     </div>
   </nav>
 

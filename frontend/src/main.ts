@@ -4,6 +4,15 @@ import { initCharts, switchEnergyTab } from './charts/index.js';
 import { openUploadModal, closeUploadModal, switchUploadTab, handleFile, applyData } from './utils/upload.js';
 import { updateTalhoesFromAPI } from './data/index.js';
 
+let fetchSequence = 0;
+let autoFetchTimer: number | undefined;
+
+function toApiDateTime(value: string): string {
+  if (!value) return '';
+  const normalized = value.length === 16 ? `${value}:00` : value;
+  return normalized.replace('T', ' ');
+}
+
 // ============================================================
 // FETCH DATA FUNCTION
 // ============================================================
@@ -12,16 +21,24 @@ async function fetchData(): Promise<void> {
   const endInput = document.getElementById('end-date') as HTMLInputElement;
   if (!startInput || !endInput) return;
 
+  const start = toApiDateTime(startInput.value);
+  const end = toApiDateTime(endInput.value);
+  if (!start || !end) return;
+
+  if (new Date(start).getTime() > new Date(end).getTime()) {
+    console.warn('Invalid date range: start is after end.');
+    return;
+  }
+
   const btn = document.querySelector('.date-picker button') as HTMLButtonElement;
   const loader = document.getElementById('fullscreen-loader');
+  const currentFetch = ++fetchSequence;
   if (btn) btn.disabled = true;
   loader?.classList.remove('hidden');
 
   try {
-    const start = startInput.value.replace('T', ' ');
-    const end = endInput.value.replace('T', ' ');
-
     await updateTalhoesFromAPI(start, end);
+    if (currentFetch !== fetchSequence) return;
 
     // Re-render components
     renderTalhaoMap('talhao-map');
@@ -84,5 +101,33 @@ window.addEventListener('DOMContentLoaded', () => {
   initLayoutPreference();
   const activeBtn = document.querySelector<HTMLElement>('.view-btn.active');
   if (activeBtn) switchView('operacional', activeBtn);
+
+  const startInput = document.getElementById('start-date') as HTMLInputElement | null;
+  const endInput = document.getElementById('end-date') as HTMLInputElement | null;
+  const fetchBtn = document.getElementById('fetch-data-btn') as HTMLButtonElement | null;
+
+  const triggerFetch = () => { void fetchData(); };
+  const triggerFetchDebounced = () => {
+    if (autoFetchTimer) window.clearTimeout(autoFetchTimer);
+    autoFetchTimer = window.setTimeout(() => {
+      void fetchData();
+    }, 350);
+  };
+
+  startInput?.addEventListener('change', triggerFetch);
+  endInput?.addEventListener('change', triggerFetch);
+  startInput?.addEventListener('input', triggerFetchDebounced);
+  endInput?.addEventListener('input', triggerFetchDebounced);
+
+  startInput?.addEventListener('keydown', (evt) => {
+    if (evt.key === 'Enter') triggerFetch();
+  });
+  endInput?.addEventListener('keydown', (evt) => {
+    if (evt.key === 'Enter') triggerFetch();
+  });
+
+  // Reinforce click handling beyond inline onclick.
+  fetchBtn?.addEventListener('click', triggerFetch);
+
   void fetchData();
 });

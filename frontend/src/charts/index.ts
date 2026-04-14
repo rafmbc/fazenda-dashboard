@@ -1,5 +1,5 @@
 import { Chart, registerables } from 'chart.js';
-import { timeLabels, weekLabels, talhoes, getHumidityTimeSeries, getAllHumidityTimeSeries, getEnergyAccumulativeTimeSeries, getWeeklyEnergyData, getPowerFactorTimeSeries, getWeeklyTotalEnergyWh, getAveragePowerFactor, getMaxEnergyKwh, formatEnergyValue } from '../data/index.js';
+import { timeLabels, weekLabels, talhoes, getHumidityTimeSeries, getAllHumidityTimeSeries, getEnergyAccumulativeTimeSeries, getWeeklyEnergyData, getPowerFactorTimeSeries, getPowerImbalanceTimeSeries, getWeeklyTotalEnergyWh, getAveragePowerFactor, getMaxEnergyKwh, formatEnergyValue } from '../data/index.js';
 import { rand, cumsum, isDarkTheme } from '../utils/helpers.js';
 import { realData, realMaps } from '../utils/upload.js';
 
@@ -96,7 +96,8 @@ export function initCharts(): void {
   // -- Fator de Potência (ger-energia) --
   const pfSeries = getPowerFactorTimeSeries();
   const avgPowerFactor = getAveragePowerFactor();
-  const isPowerFactorOk = avgPowerFactor >= 0.85;
+  const POWER_FACTOR_LIMIT = 0.92;
+  const isPowerFactorOk = avgPowerFactor >= POWER_FACTOR_LIMIT;
   destroy('fatorPotenciaChart');
   const fpInst = new Chart(canvas('fatorPotenciaChart'), {
     type: 'line',
@@ -104,19 +105,19 @@ export function initCharts(): void {
       labels: pfSeries.labels.length > 0 ? pfSeries.labels : timeLabels,
       datasets: [
         { label: 'Fator de Potência', data: pfSeries.data.length > 0 ? pfSeries.data : rand(0.90, 0.06, 24), borderColor: '#52c278', backgroundColor: 'rgba(82,194,120,0.08)', tension: 0.4, fill: false, pointRadius: 2, borderWidth: 2 },
-        { label: 'Limite (0.85)', data: Array(pfSeries.labels.length > 0 ? pfSeries.labels.length : 24).fill(0.85), borderColor: 'rgba(232,69,69,0.6)', borderDash: [6, 3], borderWidth: 1.5, pointRadius: 0, fill: false, tension: 0 },
+        { label: 'Limite (0.92)', data: Array(pfSeries.labels.length > 0 ? pfSeries.labels.length : 24).fill(POWER_FACTOR_LIMIT), borderColor: 'rgba(232,69,69,0.85)', borderDash: [6, 3], borderWidth: 1.8, pointRadius: 0, fill: false, tension: 0 },
       ],
     },
     options: {
       ...defaults(),
-      scales: { ...defaults().scales, y: { ...defaults().scales!['y'], min: 0.7, max: 1.0, ticks: { ...(defaults().scales!['y'] as { ticks?: object }).ticks, callback: (v: unknown) => (v as number).toFixed(2) } } },
+      scales: { ...defaults().scales, y: { ...defaults().scales!['y'], min: 0, max: 1.0, ticks: { ...(defaults().scales!['y'] as { ticks?: object }).ticks, callback: (v: unknown) => (v as number).toFixed(2) } } },
     },
   });
   instances['fatorPotenciaChart'] = fpInst;
   const fpBadge = document.querySelector('#ger-energia .chart-card.chart-full .chart-badge');
   if (fpBadge) {
     fpBadge.className = isPowerFactorOk ? 'chart-badge badge-green' : 'chart-badge badge-red';
-    fpBadge.textContent = isPowerFactorOk ? '✓ Normal > 0.85' : '⚠ Abaixo de 0.85';
+    fpBadge.textContent = isPowerFactorOk ? '✓ Normal > 0.92' : '⚠ Abaixo de 0.92';
   }
   const consumoKpi = document.querySelector('#ger-energia .kpi-grid .kpi-card:nth-child(1) .kpi-value');
   if (consumoKpi) {
@@ -150,9 +151,9 @@ export function initCharts(): void {
   }
   const fatorTrend = document.querySelector('#ger-energia .kpi-grid .kpi-card:nth-child(3) .kpi-trend');
   if (fatorTrend) {
-    const isBelowThreshold = avgPowerFactor < 0.85;
+    const isBelowThreshold = avgPowerFactor < POWER_FACTOR_LIMIT;
     fatorTrend.className = isBelowThreshold ? 'kpi-trend trend-down' : 'kpi-trend trend-up';
-    fatorTrend.textContent = isBelowThreshold ? '⚠ Abaixo de 0.85' : '✓ Eficiente';
+    fatorTrend.textContent = isBelowThreshold ? '⚠ Abaixo de 0.92' : '✓ Eficiente';
   }
 
   // -- Energia Acumulada (ger-overview) — SEMANAL --
@@ -163,7 +164,7 @@ export function initCharts(): void {
     type: 'line',
     data: {
       labels: weeklyEnergySeries.labels.length > 0 ? weeklyEnergySeries.labels : weekLabels,
-      datasets: [{ data: weeklyEnergySeries.data.length > 0 ? weeklyEnergySeries.data.map(v => v * 1000) : [280000, 520000, 780000, 1020000, 1160000, 1280000, 1359000], borderColor: '#f0a500', backgroundColor: 'rgba(240,165,0,0.12)', tension: 0.4, fill: true, pointRadius: 4, borderWidth: 2, pointBackgroundColor: '#f0a500' }],
+      datasets: [{ data: weeklyEnergySeries.data.length > 0 ? weeklyEnergySeries.data.map(v => v * 1000) : [280000, 520000, 780000, 1020000, 1160000, 1280000, 1359000], borderColor: '#f0a500', backgroundColor: 'rgba(240,165,0,0.12)', tension: 0.15, fill: true, pointRadius: 4, borderWidth: 2, pointBackgroundColor: '#f0a500' }],
     },
     options: { ...defaults(), scales: { ...defaults().scales, y: { ...defaults().scales!['y'], ticks: { ...(defaults().scales!['y'] as { ticks?: object }).ticks, callback: (v: unknown) => formatEnergyYAxis(v as number) } } } },
   });
@@ -185,31 +186,91 @@ export function initCharts(): void {
 
   // -- Energia Acumulada (ger-energia) — HORÁRIA --
   const energyAccumSeries = getEnergyAccumulativeTimeSeries();
+  const hasEnergyTimeline = energyAccumSeries.timestamps.length > 0;
+  const energyTimelineData = hasEnergyTimeline
+    ? energyAccumSeries.timestamps.map((ts, i) => ({ x: ts, y: energyAccumSeries.data[i] * 1000 }))
+    : cumsum(Array.from({ length: 24 }, (_, i) => 3000 + Math.sin(i / 3) * 1500 + Math.random() * 1000));
   destroy('energiaAcumChart');
   instances['energiaAcumChart'] = new Chart(canvas('energiaAcumChart'), {
     type: 'line',
     data: {
-      labels: energyAccumSeries.labels.length > 0 ? energyAccumSeries.labels : timeLabels,
-      datasets: [{ data: energyAccumSeries.data.length > 0 ? energyAccumSeries.data.map(v => v * 1000) : cumsum(Array.from({ length: 24 }, (_, i) => 3000 + Math.sin(i / 3) * 1500 + Math.random() * 1000)), borderColor: '#f0a500', backgroundColor: 'rgba(240,165,0,0.1)', tension: 0.4, fill: true, pointRadius: 2, borderWidth: 2, pointBackgroundColor: '#f0a500', pointBorderColor: '#f0a500' }]
+      labels: hasEnergyTimeline ? undefined : (energyAccumSeries.labels.length > 0 ? energyAccumSeries.labels : timeLabels),
+      datasets: [{ data: energyTimelineData, borderColor: '#f0a500', backgroundColor: 'rgba(240,165,0,0.1)', tension: 0.4, fill: true, pointRadius: 2, borderWidth: 2, pointBackgroundColor: '#f0a500', pointBorderColor: '#f0a500' }]
     },
-    options: { ...defaults(), scales: { ...defaults().scales, y: { ...defaults().scales!['y'], ticks: { ...(defaults().scales!['y'] as { ticks?: object }).ticks, callback: (v: unknown) => formatEnergyYAxis(v as number) } } } },
+    options: {
+      ...defaults(),
+      scales: {
+        ...defaults().scales,
+        x: hasEnergyTimeline
+          ? {
+              type: 'linear',
+              grid: { color: colors().grid },
+              ticks: {
+                color: colors().tick,
+                font: { family: 'Space Mono', size: 10 },
+                maxTicksLimit: 6,
+                callback: (v: unknown) => new Date(Number(v)).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }),
+              },
+            }
+          : defaults().scales?.x,
+        y: { ...defaults().scales!['y'], ticks: { ...(defaults().scales!['y'] as { ticks?: object }).ticks, callback: (v: unknown) => formatEnergyYAxis(v as number) } },
+      },
+    },
   });
 
   // -- Desbalanceamento de Potência Ativa (ger-energia) --
-  const desbalA = rand(0, 60, 24);
-  const desbalB = rand(30, 70, 24).map(v => -v);
-  const desbalMax = Math.max(...desbalA.map(Math.abs), ...desbalB.map(Math.abs));
+  const desbalSeries = getPowerImbalanceTimeSeries();
+  const hasDesbalTimeline = desbalSeries.timestamps.length > 0;
+  const desbalA = hasDesbalTimeline ? desbalSeries.ab : rand(0, 60, 24);
+  const desbalB = hasDesbalTimeline ? desbalSeries.bc : rand(30, 70, 24).map(v => -v);
+  const desbalMax = Math.max(
+    ...desbalA.filter((v): v is number => Number.isFinite(v)).map(Math.abs),
+    ...desbalB.filter((v): v is number => Number.isFinite(v)).map(Math.abs),
+    0,
+  );
   destroy('desbalanceChart');
   instances['desbalanceChart'] = new Chart(canvas('desbalanceChart'), {
     type: 'bar',
     data: {
-      labels: timeLabels,
+      labels: hasDesbalTimeline ? undefined : timeLabels,
       datasets: [
-        { label: 'A–B', data: desbalA, backgroundColor: desbalA.map(v => Math.abs(v) > 50 ? 'rgba(232,69,69,0.7)' : 'rgba(82,194,120,0.5)'), borderRadius: 3 },
-        { label: 'B–C', data: desbalB, backgroundColor: desbalB.map(v => Math.abs(v) > 50 ? 'rgba(232,69,69,0.7)' : 'rgba(74,158,255,0.5)'), borderRadius: 3 },
+        {
+          label: 'A–B',
+          data: hasDesbalTimeline
+            ? desbalSeries.timestamps.map((ts, idx) => ({ x: ts, y: Number.isFinite(desbalA[idx]) ? desbalA[idx] : null }))
+            : desbalA,
+          backgroundColor: desbalA.map(v => Math.abs(v) > 50 ? 'rgba(232,69,69,0.7)' : 'rgba(82,194,120,0.5)'),
+          borderRadius: 3,
+        },
+        {
+          label: 'B–C',
+          data: hasDesbalTimeline
+            ? desbalSeries.timestamps.map((ts, idx) => ({ x: ts, y: Number.isFinite(desbalB[idx]) ? desbalB[idx] : null }))
+            : desbalB,
+          backgroundColor: desbalB.map(v => Math.abs(v) > 50 ? 'rgba(232,69,69,0.7)' : 'rgba(74,158,255,0.5)'),
+          borderRadius: 3,
+        },
       ],
     },
-    options: { ...defaults(), scales: { ...defaults().scales, y: { ...defaults().scales!['y'], ticks: { ...(defaults().scales!['y'] as { ticks?: object }).ticks, callback: (v: unknown) => v + ' W' } } } },
+    options: {
+      ...defaults(),
+      scales: {
+        ...defaults().scales,
+        x: hasDesbalTimeline
+          ? {
+              type: 'linear',
+              grid: { color: colors().grid },
+              ticks: {
+                color: colors().tick,
+                font: { family: 'Space Mono', size: 10 },
+                maxTicksLimit: 6,
+                callback: (v: unknown) => new Date(Number(v)).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }),
+              },
+            }
+          : defaults().scales?.x,
+        y: { ...defaults().scales!['y'], ticks: { ...(defaults().scales!['y'] as { ticks?: object }).ticks, callback: (v: unknown) => v + ' W' } },
+      },
+    },
   });
   const desbalKpiVal = document.querySelector('#ger-energia .kpi-grid .kpi-card:nth-child(2) .kpi-value');
   if (desbalKpiVal) desbalKpiVal.innerHTML = Math.round(desbalMax) + '<span class="kpi-unit">W</span>';
@@ -219,11 +280,21 @@ export function initCharts(): void {
   const selected = ['A1', 'B2', 'C3', 'D4', 'E5'];
   const humiditySeries = getAllHumidityTimeSeries(selected);
   const hasRealHumidityData = humiditySeries.labels.length > 0;
+  const hasHumidityTimeline = humiditySeries.timestamps.length > 0;
   const umDatasets = selected.map((name, i) => {
     const talhaoBase = talhoes.find(t => t.id === name)?.umidade ?? 50;
+    const dataPoints = hasRealHumidityData
+      ? (hasHumidityTimeline
+          ? humiditySeries.timestamps.map((ts, idx) => {
+              const y = humiditySeries.series[name]?.[idx];
+              return { x: ts, y: Number.isFinite(y as number) ? y as number : null };
+            })
+          : (humiditySeries.series[name] ?? []))
+      : rand(talhaoBase, 10, timeLabels.length);
+
     return {
       label: `Talhão ${name}`,
-      data: hasRealHumidityData ? (humiditySeries.series[name] ?? []) : rand(talhaoBase, 10, timeLabels.length),
+      data: dataPoints,
       borderColor: umColors[i],
       backgroundColor: umColors[i] + '18',
       tension: 0.25,
@@ -246,8 +317,35 @@ export function initCharts(): void {
   destroy('umidadeChart');
   instances['umidadeChart'] = new Chart(canvas('umidadeChart'), {
     type: 'line',
-    data: { labels: umLabels.length > 0 ? umLabels : timeLabels, datasets: umDatasets },
-    options: { ...defaults(), plugins: { ...defaults().plugins, legend: { display: false } }, scales: { ...defaults().scales, y: { ...defaults().scales!['y'], min: 0, max: 100, ticks: { ...(defaults().scales!['y'] as { ticks?: object }).ticks, callback: (v: unknown) => v + '%' } } } },
+    data: {
+      labels: hasHumidityTimeline ? undefined : (umLabels.length > 0 ? umLabels : timeLabels),
+      datasets: umDatasets,
+    },
+    options: {
+      ...defaults(),
+      plugins: { ...defaults().plugins, legend: { display: false } },
+      scales: {
+        ...defaults().scales,
+        x: hasHumidityTimeline
+          ? {
+              type: 'linear',
+              grid: { color: colors().grid },
+              ticks: {
+                color: colors().tick,
+                font: { family: 'Space Mono', size: 10 },
+                maxTicksLimit: 6,
+                callback: (v: unknown) => new Date(Number(v)).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }),
+              },
+            }
+          : defaults().scales?.x,
+        y: {
+          ...defaults().scales!['y'],
+          min: 0,
+          max: 100,
+          ticks: { ...(defaults().scales!['y'] as { ticks?: object }).ticks, callback: (v: unknown) => v + '%' },
+        },
+      },
+    },
   });
 }
 
@@ -272,18 +370,53 @@ export function renderDetailCharts(talhaoId: string): void {
       labels: fpLabels,
       datasets: [
         { label: 'Fator de Potência', data: fpData, borderColor: '#52c278', backgroundColor: 'rgba(82,194,120,0.08)', tension: 0.4, fill: false, pointRadius: 2, borderWidth: 2 },
-        { label: 'Limite', data: Array(fpLabels.length).fill(0.85), borderColor: 'rgba(232,69,69,0.5)', borderDash: [5, 3], pointRadius: 0, fill: false, tension: 0, borderWidth: 1.5 },
+        { label: 'Limite (0.92)', data: Array(fpLabels.length).fill(0.92), borderColor: 'rgba(232,69,69,0.85)', borderDash: [5, 3], pointRadius: 0, fill: false, tension: 0, borderWidth: 1.8 },
       ],
     },
-    options: { ...defaults(), scales: { ...defaults().scales, y: { ...defaults().scales!['y'], min: 0.7, max: 1.0, ticks: { ...(defaults().scales!['y'] as { ticks?: object }).ticks, callback: (v: unknown) => (v as number).toFixed(2) } } } },
+    options: { ...defaults(), scales: { ...defaults().scales, y: { ...defaults().scales!['y'], min: 0, max: 1.0, ticks: { ...(defaults().scales!['y'] as { ticks?: object }).ticks, callback: (v: unknown) => (v as number).toFixed(2) } } } },
   });
 
-  const enRaw = energiaRows?.length ? energiaRows.map(r => parseFloat(r[maps.kwh] ?? '0') || 0).slice(0, 24) : cumsum(Array.from({ length: 24 }, () => 3 + Math.sin(Math.random() * 3) * 1.5));
+  const detailEnergySeries = getEnergyAccumulativeTimeSeries();
+  const hasDetailEnergyTimeline = detailEnergySeries.timestamps.length > 0;
+  const enRaw = hasDetailEnergyTimeline
+    ? detailEnergySeries.data
+    : (energiaRows?.length ? energiaRows.map(r => parseFloat(r[maps.kwh] ?? '0') || 0).slice(0, 24) : cumsum(Array.from({ length: 24 }, () => 3 + Math.sin(Math.random() * 3) * 1.5)));
   destroy('det-energiaAcum');
   instances['det-energiaAcum'] = new Chart(canvas('det-energiaAcum'), {
     type: 'line',
-    data: { labels: fpLabels, datasets: [{ data: enRaw.map(v => v * 1000), borderColor: '#f0a500', backgroundColor: 'rgba(240,165,0,0.1)', tension: 0.4, fill: true, pointRadius: 2, borderWidth: 2 }] },
-    options: { ...defaults(), scales: { ...defaults().scales, y: { ...defaults().scales!['y'], ticks: { ...(defaults().scales!['y'] as { ticks?: object }).ticks, callback: (v: unknown) => formatEnergyYAxis(v as number) } } } },
+    data: {
+      labels: hasDetailEnergyTimeline ? undefined : fpLabels,
+      datasets: [{
+        data: hasDetailEnergyTimeline
+          ? detailEnergySeries.timestamps.map((ts, idx) => ({ x: ts, y: (enRaw[idx] ?? 0) * 1000 }))
+          : enRaw.map(v => v * 1000),
+        borderColor: '#f0a500',
+        backgroundColor: 'rgba(240,165,0,0.1)',
+        tension: 0.4,
+        fill: true,
+        pointRadius: 2,
+        borderWidth: 2,
+      }],
+    },
+    options: {
+      ...defaults(),
+      scales: {
+        ...defaults().scales,
+        x: hasDetailEnergyTimeline
+          ? {
+              type: 'linear',
+              grid: { color: colors().grid },
+              ticks: {
+                color: colors().tick,
+                font: { family: 'Space Mono', size: 10 },
+                maxTicksLimit: 6,
+                callback: (v: unknown) => new Date(Number(v)).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }),
+              },
+            }
+          : defaults().scales?.x,
+        y: { ...defaults().scales!['y'], ticks: { ...(defaults().scales!['y'] as { ticks?: object }).ticks, callback: (v: unknown) => formatEnergyYAxis(v as number) } },
+      },
+    },
   });
 
   const dabRaw = energiaRows?.length ? energiaRows.map(r => parseFloat(r[maps.dab] ?? '0') || 0).slice(0, 24) : rand(0, 60, 24);
@@ -339,7 +472,10 @@ export function switchEnergyTab(tab: string, btn: HTMLElement): void {
   // Destroy and recreate the chart to ensure clean state
   destroy('energiaAcumChart');
   const energyAccumSeries = getEnergyAccumulativeTimeSeries();
-  const newData = energyAccumSeries.data.length > 0 ? energyAccumSeries.data.map(v => v * 1000) : cumsum(Array.from({ length: 24 }, () => 2500 + Math.random() * 2500));
+  const hasEnergyTimeline = energyAccumSeries.timestamps.length > 0;
+  const newData = hasEnergyTimeline
+    ? energyAccumSeries.timestamps.map((ts, i) => ({ x: ts, y: energyAccumSeries.data[i] * 1000 }))
+    : (energyAccumSeries.data.length > 0 ? energyAccumSeries.data.map(v => v * 1000) : cumsum(Array.from({ length: 24 }, () => 2500 + Math.random() * 2500)));
   const newLabels = energyAccumSeries.labels.length > 0 ? energyAccumSeries.labels : timeLabels;
   const borderColor = tab === 'iluminacao' ? '#f0a500' : '#4a9eff';
   const backgroundColor = tab === 'iluminacao' ? 'rgba(240,165,0,0.1)' : 'rgba(74,158,255,0.1)';
@@ -347,9 +483,27 @@ export function switchEnergyTab(tab: string, btn: HTMLElement): void {
   instances['energiaAcumChart'] = new Chart(canvas('energiaAcumChart'), {
     type: 'line',
     data: {
-      labels: newLabels,
+      labels: hasEnergyTimeline ? undefined : newLabels,
       datasets: [{ data: newData, borderColor, backgroundColor, tension: 0.4, fill: true, pointRadius: 2, borderWidth: 2, pointBackgroundColor: borderColor, pointBorderColor: borderColor }]
     },
-    options: { ...defaults(), scales: { ...defaults().scales, y: { ...defaults().scales!['y'], ticks: { ...(defaults().scales!['y'] as { ticks?: object }).ticks, callback: (v: unknown) => formatEnergyYAxis(v as number) } } } },
+    options: {
+      ...defaults(),
+      scales: {
+        ...defaults().scales,
+        x: hasEnergyTimeline
+          ? {
+              type: 'linear',
+              grid: { color: colors().grid },
+              ticks: {
+                color: colors().tick,
+                font: { family: 'Space Mono', size: 10 },
+                maxTicksLimit: 6,
+                callback: (v: unknown) => new Date(Number(v)).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }),
+              },
+            }
+          : defaults().scales?.x,
+        y: { ...defaults().scales!['y'], ticks: { ...(defaults().scales!['y'] as { ticks?: object }).ticks, callback: (v: unknown) => formatEnergyYAxis(v as number) } },
+      },
+    },
   });
 }
