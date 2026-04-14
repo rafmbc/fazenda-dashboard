@@ -97,6 +97,44 @@ export function renderTalhaoList(): void {
 }
 
 // ============================================================
+// GERENCIAL TALHÃO LIST
+// ============================================================
+export function renderGerencialTalhaoList(): void {
+  const c = document.getElementById('ger-talhao-list');
+  if (!c) return;
+  c.innerHTML = '';
+  talhoes.forEach(t => {
+    const dotClass = t.status === 'crit' ? 'dot-crit' : t.status === 'warn' ? 'dot-warn' : 'dot-ok';
+    const umClass = t.umidade < 30 ? 'trend-down' : t.umidade > 70 ? 'trend-warn' : 'trend-up';
+    const row = document.createElement('div');
+    row.className = 'talhao-row';
+    row.innerHTML = `
+      <div class="t-status-dot ${dotClass}"></div>
+      <div>
+        <div class="t-info-name">Talhão ${t.id} · ${t.cultura}</div>
+        <div class="t-info-sub">${t.area} ha · NDVI: ${t.ndvi} · ${t.alerts > 0 ? `⚠ ${t.alerts} alerta(s)` : '✓ Normal'}</div>
+      </div>
+      <div class="t-metrics">
+        <div class="t-metric">
+          <div class="t-metric-val ${umClass}">${t.umidade}%</div>
+          <div class="t-metric-lbl">Umidade</div>
+        </div>
+        <div class="t-metric">
+          <div class="t-metric-val">${t.energia} kWh</div>
+          <div class="t-metric-lbl">Energia</div>
+        </div>
+        <div class="t-metric">
+          <div class="t-metric-val" style="color:${getNdviColor(t.ndvi)}">${t.ndvi}</div>
+          <div class="t-metric-lbl">NDVI</div>
+        </div>
+      </div>
+      <button class="t-action-btn">Ver detalhes →</button>`;
+    row.onclick = () => openTalhaoDetail(t.id);
+    c.appendChild(row);
+  });
+}
+
+// ============================================================
 // TALHÃO DETAIL
 // ============================================================
 export function openTalhaoDetail(talhaoId: string): void {

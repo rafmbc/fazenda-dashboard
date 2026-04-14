@@ -1,4 +1,4 @@
-import { renderTalhaoMap, renderAlertsList, renderTalhaoList, renderGauges, renderSetorBars, registerIntervention, openTalhaoDetail } from './components/renderers.js';
+import { renderTalhaoMap, renderAlertsList, renderTalhaoList, renderGerencialTalhaoList, renderGauges, renderSetorBars, registerIntervention, openTalhaoDetail } from './components/renderers.js';
 import { goToSection, goToSectionMob, switchView, toggleTheme, toggleLayout, highlightNav, initLayoutPreference } from './components/navigation.js';
 import { initCharts, switchEnergyTab } from './charts/index.js';
 import { openUploadModal, closeUploadModal, switchUploadTab, handleFile, applyData } from './utils/upload.js';
@@ -18,8 +18,8 @@ async function fetchData(): Promise<void> {
   loader?.classList.remove('hidden');
 
   try {
-    const start = startInput.value.replace('T', '%20');
-    const end = endInput.value.replace('T', '%20');
+    const start = startInput.value.replace('T', ' ');
+    const end = endInput.value.replace('T', ' ');
 
     await updateTalhoesFromAPI(start, end);
 
@@ -28,6 +28,7 @@ async function fetchData(): Promise<void> {
     renderTalhaoMap('talhao-map-saude');
     renderAlertsList();
     renderTalhaoList();
+    renderGerencialTalhaoList();
     renderGauges();
     renderSetorBars();
     setTimeout(initCharts, 100);

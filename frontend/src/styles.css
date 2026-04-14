@@ -759,8 +759,13 @@
     font-size: 28px;
     font-weight: 800;
     color: var(--text-primary);
-    line-height: 1;
+    line-height: 1.2;
     margin-bottom: 6px;
+    display: flex;
+    align-items: baseline;
+    gap: 2px;
+    flex-wrap: wrap;
+    min-height: 32px;
   }
   .kpi-unit { font-size: 13px; color: var(--text-muted); margin-left: 2px; }
   .kpi-trend {

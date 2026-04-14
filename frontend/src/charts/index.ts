@@ -1,5 +1,5 @@
 import { Chart, registerables } from 'chart.js';
-import { timeLabels, weekLabels, talhoes, getHumidityTimeSeries, getAllHumidityTimeSeries, getEnergyAccumulativeTimeSeries, getWeeklyEnergyData, getPowerFactorTimeSeries } from '../data/index.js';
+import { timeLabels, weekLabels, talhoes, getHumidityTimeSeries, getAllHumidityTimeSeries, getEnergyAccumulativeTimeSeries, getWeeklyEnergyData, getPowerFactorTimeSeries, getWeeklyTotalEnergyWh, getAveragePowerFactor, getMaxEnergyKwh, formatEnergyValue } from '../data/index.js';
 import { rand, cumsum, isDarkTheme } from '../utils/helpers.js';
 import { realData, realMaps } from '../utils/upload.js';
 
@@ -65,12 +65,38 @@ function canvas(id: string): HTMLCanvasElement {
   return document.getElementById(id) as HTMLCanvasElement;
 }
 
+// Smart energy formatter based on max value in period
+function formatEnergyYAxis(valueInWh: number): string {
+  const maxKwh = getMaxEnergyKwh();
+  
+  if (maxKwh >= 1) {
+    // Format in kWh
+    const valueInKwh = valueInWh / 1000;
+    if (valueInKwh >= 1000) {
+      return (valueInKwh / 1000).toFixed(1) + ' MWh';
+    } else {
+      return valueInKwh.toFixed(1) + ' kWh';
+    }
+  } else {
+    // Format in Wh
+    if (valueInWh >= 1000000) {
+      return (valueInWh / 1000000).toFixed(1) + ' M Wh';
+    } else if (valueInWh >= 10000) {
+      return (valueInWh / 1000).toFixed(1) + ' k Wh';
+    } else {
+      return valueInWh.toFixed(2) + ' Wh';
+    }
+  }
+}
+
 // ============================================================
 // MAIN CHARTS (sections: ger-overview, ger-energia, op-umidade)
 // ============================================================
 export function initCharts(): void {
   // -- Fator de Potência (ger-energia) --
   const pfSeries = getPowerFactorTimeSeries();
+  const avgPowerFactor = getAveragePowerFactor();
+  const isPowerFactorOk = avgPowerFactor >= 0.85;
   destroy('fatorPotenciaChart');
   const fpInst = new Chart(canvas('fatorPotenciaChart'), {
     type: 'line',
@@ -87,18 +113,64 @@ export function initCharts(): void {
     },
   });
   instances['fatorPotenciaChart'] = fpInst;
+  const fpBadge = document.querySelector('#ger-energia .chart-card.chart-full .chart-badge');
+  if (fpBadge) {
+    fpBadge.className = isPowerFactorOk ? 'chart-badge badge-green' : 'chart-badge badge-red';
+    fpBadge.textContent = isPowerFactorOk ? '✓ Normal > 0.85' : '⚠ Abaixo de 0.85';
+  }
+  const consumoKpi = document.querySelector('#ger-energia .kpi-grid .kpi-card:nth-child(1) .kpi-value');
+  if (consumoKpi) {
+    const totalWh = getWeeklyTotalEnergyWh();
+    const maxKwh = getMaxEnergyKwh();
+    let display = '';
+    
+    if (maxKwh >= 1) {
+      // Display in kWh
+      const totalKwh = totalWh / 1000;
+      if (totalKwh >= 1000) {
+        display = (totalKwh / 1000).toFixed(1) + '<span class="kpi-unit">MWh</span>';
+      } else {
+        display = totalKwh.toFixed(1) + '<span class="kpi-unit">kWh</span>';
+      }
+    } else {
+      // Display in Wh
+      if (totalWh >= 1000000) {
+        display = (totalWh / 1000000).toFixed(1) + '<span class="kpi-unit">M Wh</span>';
+      } else if (totalWh >= 10000) {
+        display = (totalWh / 1000).toFixed(1) + '<span class="kpi-unit">k Wh</span>';
+      } else {
+        display = totalWh.toFixed(2) + '<span class="kpi-unit">Wh</span>';
+      }
+    }
+    consumoKpi.innerHTML = display;
+  }
+  const fatorKpi = document.querySelector('#ger-energia .kpi-grid .kpi-card:nth-child(3) .kpi-value');
+  if (fatorKpi) {
+    fatorKpi.textContent = avgPowerFactor.toFixed(2);
+  }
+  const fatorTrend = document.querySelector('#ger-energia .kpi-grid .kpi-card:nth-child(3) .kpi-trend');
+  if (fatorTrend) {
+    const isBelowThreshold = avgPowerFactor < 0.85;
+    fatorTrend.className = isBelowThreshold ? 'kpi-trend trend-down' : 'kpi-trend trend-up';
+    fatorTrend.textContent = isBelowThreshold ? '⚠ Abaixo de 0.85' : '✓ Eficiente';
+  }
 
   // -- Energia Acumulada (ger-overview) — SEMANAL --
   const weeklyEnergySeries = getWeeklyEnergyData();
+  const totalEnergyWh = getWeeklyTotalEnergyWh();
   destroy('energiaChart');
   instances['energiaChart'] = new Chart(canvas('energiaChart'), {
     type: 'line',
     data: {
       labels: weeklyEnergySeries.labels.length > 0 ? weeklyEnergySeries.labels : weekLabels,
-      datasets: [{ data: weeklyEnergySeries.data.length > 0 ? weeklyEnergySeries.data : [280, 520, 780, 1020, 1160, 1280, 1359], borderColor: '#f0a500', backgroundColor: 'rgba(240,165,0,0.12)', tension: 0.4, fill: true, pointRadius: 4, borderWidth: 2, pointBackgroundColor: '#f0a500' }],
+      datasets: [{ data: weeklyEnergySeries.data.length > 0 ? weeklyEnergySeries.data.map(v => v * 1000) : [280000, 520000, 780000, 1020000, 1160000, 1280000, 1359000], borderColor: '#f0a500', backgroundColor: 'rgba(240,165,0,0.12)', tension: 0.4, fill: true, pointRadius: 4, borderWidth: 2, pointBackgroundColor: '#f0a500' }],
     },
-    options: { ...defaults(), scales: { ...defaults().scales, y: { ...defaults().scales!['y'], ticks: { ...(defaults().scales!['y'] as { ticks?: object }).ticks, callback: (v: unknown) => v + ' kWh' } } } },
+    options: { ...defaults(), scales: { ...defaults().scales, y: { ...defaults().scales!['y'], ticks: { ...(defaults().scales!['y'] as { ticks?: object }).ticks, callback: (v: unknown) => formatEnergyYAxis(v as number) } } } },
   });
+  const energiaBadge = document.querySelector('#ger-overview .two-col .chart-badge.badge-amber');
+  if (energiaBadge) {
+    energiaBadge.textContent = formatEnergyValue(totalEnergyWh / 1000) + ' total';
+  }
 
   // -- Eficiência Produtiva (ger-overview) --
   destroy('eficienciaChart');
@@ -118,14 +190,15 @@ export function initCharts(): void {
     type: 'line',
     data: {
       labels: energyAccumSeries.labels.length > 0 ? energyAccumSeries.labels : timeLabels,
-      datasets: [{ data: energyAccumSeries.data.length > 0 ? energyAccumSeries.data : cumsum(Array.from({ length: 24 }, (_, i) => 3 + Math.sin(i / 3) * 1.5 + Math.random())), borderColor: '#f0a500', backgroundColor: 'rgba(240,165,0,0.1)', tension: 0.4, fill: true, pointRadius: 2, borderWidth: 2 }]
+      datasets: [{ data: energyAccumSeries.data.length > 0 ? energyAccumSeries.data.map(v => v * 1000) : cumsum(Array.from({ length: 24 }, (_, i) => 3000 + Math.sin(i / 3) * 1500 + Math.random() * 1000)), borderColor: '#f0a500', backgroundColor: 'rgba(240,165,0,0.1)', tension: 0.4, fill: true, pointRadius: 2, borderWidth: 2, pointBackgroundColor: '#f0a500', pointBorderColor: '#f0a500' }]
     },
-    options: { ...defaults(), scales: { ...defaults().scales, y: { ...defaults().scales!['y'], ticks: { ...(defaults().scales!['y'] as { ticks?: object }).ticks, callback: (v: unknown) => (v as number).toFixed(0) + ' kWh' } } } },
+    options: { ...defaults(), scales: { ...defaults().scales, y: { ...defaults().scales!['y'], ticks: { ...(defaults().scales!['y'] as { ticks?: object }).ticks, callback: (v: unknown) => formatEnergyYAxis(v as number) } } } },
   });
 
   // -- Desbalanceamento de Potência Ativa (ger-energia) --
   const desbalA = rand(0, 60, 24);
   const desbalB = rand(30, 70, 24).map(v => -v);
+  const desbalMax = Math.max(...desbalA.map(Math.abs), ...desbalB.map(Math.abs));
   destroy('desbalanceChart');
   instances['desbalanceChart'] = new Chart(canvas('desbalanceChart'), {
     type: 'bar',
@@ -138,6 +211,8 @@ export function initCharts(): void {
     },
     options: { ...defaults(), scales: { ...defaults().scales, y: { ...defaults().scales!['y'], ticks: { ...(defaults().scales!['y'] as { ticks?: object }).ticks, callback: (v: unknown) => v + ' W' } } } },
   });
+  const desbalKpiVal = document.querySelector('#ger-energia .kpi-grid .kpi-card:nth-child(2) .kpi-value');
+  if (desbalKpiVal) desbalKpiVal.innerHTML = Math.round(desbalMax) + '<span class="kpi-unit">W</span>';
 
   // -- Umidade por Talhão (op-umidade) --
   const umColors = ['#52c278', '#4a9eff', '#c8e63a', '#f0a500', '#e84545'];
@@ -207,8 +282,8 @@ export function renderDetailCharts(talhaoId: string): void {
   destroy('det-energiaAcum');
   instances['det-energiaAcum'] = new Chart(canvas('det-energiaAcum'), {
     type: 'line',
-    data: { labels: fpLabels, datasets: [{ data: enRaw, borderColor: '#f0a500', backgroundColor: 'rgba(240,165,0,0.1)', tension: 0.4, fill: true, pointRadius: 2, borderWidth: 2 }] },
-    options: { ...defaults(), scales: { ...defaults().scales, y: { ...defaults().scales!['y'], ticks: { ...(defaults().scales!['y'] as { ticks?: object }).ticks, callback: (v: unknown) => (v as number).toFixed(1) + ' kWh' } } } },
+    data: { labels: fpLabels, datasets: [{ data: enRaw.map(v => v * 1000), borderColor: '#f0a500', backgroundColor: 'rgba(240,165,0,0.1)', tension: 0.4, fill: true, pointRadius: 2, borderWidth: 2 }] },
+    options: { ...defaults(), scales: { ...defaults().scales, y: { ...defaults().scales!['y'], ticks: { ...(defaults().scales!['y'] as { ticks?: object }).ticks, callback: (v: unknown) => formatEnergyYAxis(v as number) } } } },
   });
 
   const dabRaw = energiaRows?.length ? energiaRows.map(r => parseFloat(r[maps.dab] ?? '0') || 0).slice(0, 24) : rand(0, 60, 24);
@@ -261,17 +336,20 @@ export function switchEnergyTab(tab: string, btn: HTMLElement): void {
   const badge = document.getElementById('energia-tipo-badge');
   if (badge) badge.textContent = tab === 'iluminacao' ? 'Iluminação' : 'Sistemas';
 
-  const inst = instances['energiaAcumChart'];
-  if (inst && inst.data && inst.data.datasets && inst.data.datasets.length > 0) {
-    try {
-      const newData = cumsum(Array.from({ length: 24 }, () => 2.5 + Math.random() * 2.5));
-      const dataset = inst.data.datasets[0] as any;
-      dataset.data = newData;
-      dataset.borderColor = tab === 'iluminacao' ? '#f0a500' : '#4a9eff';
-      dataset.backgroundColor = tab === 'iluminacao' ? 'rgba(240,165,0,0.1)' : 'rgba(74,158,255,0.1)';
-      inst.update();
-    } catch (e) {
-      console.error('Error updating energy chart:', e);
-    }
-  }
+  // Destroy and recreate the chart to ensure clean state
+  destroy('energiaAcumChart');
+  const energyAccumSeries = getEnergyAccumulativeTimeSeries();
+  const newData = energyAccumSeries.data.length > 0 ? energyAccumSeries.data.map(v => v * 1000) : cumsum(Array.from({ length: 24 }, () => 2500 + Math.random() * 2500));
+  const newLabels = energyAccumSeries.labels.length > 0 ? energyAccumSeries.labels : timeLabels;
+  const borderColor = tab === 'iluminacao' ? '#f0a500' : '#4a9eff';
+  const backgroundColor = tab === 'iluminacao' ? 'rgba(240,165,0,0.1)' : 'rgba(74,158,255,0.1)';
+  
+  instances['energiaAcumChart'] = new Chart(canvas('energiaAcumChart'), {
+    type: 'line',
+    data: {
+      labels: newLabels,
+      datasets: [{ data: newData, borderColor, backgroundColor, tension: 0.4, fill: true, pointRadius: 2, borderWidth: 2, pointBackgroundColor: borderColor, pointBorderColor: borderColor }]
+    },
+    options: { ...defaults(), scales: { ...defaults().scales, y: { ...defaults().scales!['y'], ticks: { ...(defaults().scales!['y'] as { ticks?: object }).ticks, callback: (v: unknown) => formatEnergyYAxis(v as number) } } } },
+  });
 }

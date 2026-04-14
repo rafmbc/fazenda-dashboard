@@ -67,6 +67,9 @@
     <div class="nav-item" data-view="gerencial" onclick="goToSection('ger-energia', this)">
       <span class="nav-icon">⚡</span> Energia
     </div>
+    <div class="nav-item" data-view="gerencial" onclick="goToSection('ger-talhoes', this)">
+      <span class="nav-icon">🌾</span> Talhões
+    </div>
     <div class="nav-item" data-view="gerencial" onclick="goToSection('ger-saude', this)">
       <span class="nav-icon">🌿</span> Saúde Lavoura
     </div>
@@ -259,7 +262,7 @@
         <div class="chart-card">
           <div class="chart-header">
             <div>
-              <div class="chart-title">Energia Acumulada [kWh]</div>
+              <div class="chart-title">Energia Acumulada [Wh]</div>
               <div class="chart-subtitle">Consumo total ao longo do tempo</div>
             </div>
             <span class="chart-badge badge-amber">1359 kWh total</span>
@@ -335,7 +338,7 @@
         <div class="chart-card">
           <div class="chart-header">
             <div>
-              <div class="chart-title">Energia Acumulada [kWh]</div>
+              <div class="chart-title">Energia Acumulada [Wh]</div>
               <div class="chart-subtitle">Consumo cumulativo no período</div>
             </div>
             <span class="chart-badge badge-amber" id="energia-tipo-badge">Iluminação</span>
@@ -364,6 +367,20 @@
         </div>
         <div class="setor-bars" id="setor-bars"></div>
       </div>
+    </section>
+
+    <!-- ======================================= -->
+    <!-- GERENCIAL: TALHÕES                     -->
+    <!-- ======================================= -->
+    <section class="page-section" id="ger-talhoes">
+      <div class="section-header">
+        <div>
+          <div class="section-title">Talhões</div>
+          <div class="section-subtitle">Análise gerencial por área cultivável</div>
+        </div>
+        <div class="date-badge">12 talhões monitorados</div>
+      </div>
+      <div class="talhao-list" id="ger-talhao-list"></div>
     </section>
 
     <!-- ======================================= -->
@@ -476,7 +493,7 @@
         <div class="chart-card">
           <div class="chart-header">
             <div>
-              <div class="chart-title">Energia Acumulada [kWh]</div>
+              <div class="chart-title">Energia Acumulada [Wh]</div>
               <div class="chart-subtitle">Consumo cumulativo no período</div>
             </div>
             <span class="chart-badge badge-amber" id="det-energia-badge">—</span>
@@ -725,6 +742,9 @@
     </div>
     <div class="mob-nav-item" data-view="gerencial" onclick="goToSectionMob('ger-energia', this)">
       <span class="m-icon">⚡</span>Energia
+    </div>
+    <div class="mob-nav-item" data-view="gerencial" onclick="goToSectionMob('ger-talhoes', this)">
+      <span class="m-icon">🌾</span>Talhões
     </div>
   </nav>
 

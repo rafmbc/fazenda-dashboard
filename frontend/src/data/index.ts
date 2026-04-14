@@ -72,7 +72,6 @@ export async function fetchSensorData(start?: string, end?: string): Promise<Sen
   const params = new URLSearchParams({
     start: start || DEFAULT_START,
     end: end || DEFAULT_END,
-    limit: '1500',
   });
   const url = `${API_BASE_URL}?${params.toString()}`;
   try {
@@ -215,21 +214,98 @@ export function getWeeklyEnergyData(): { labels: string[]; data: number[] } {
 }
 
 export function getWeeklyTotalEnergyWh(): number {
-  if (sensorData.length === 0) return 7; // Default 7 Wh
+  if (sensorData.length === 0) return 1359000;
 
   const accumSeries = getEnergyAccumulativeTimeSeries();
-  if (accumSeries.data.length === 0) return 7;
+  if (accumSeries.data.length === 0) return 1359000;
 
   const maxEnergy = Math.max(...accumSeries.data);
   const whValue = maxEnergy * 1000; // Converter kWh para Wh
   
-  // Retornar em Wh (arredondar para 1 casa decimal)
-  return Math.round(whValue * 10) / 10 || 7;
+  return Math.round(whValue) || 1359000;
 }
 
 export function getPowerFactorTimeSeries(): { labels: string[]; data: number[] } {
   if (sensorData.length === 0) return { labels: [], data: [] };
   return buildAverageSeries(reading => reading.PowerFactor, { decimals: 3 });
+}
+
+export function getAveragePowerFactor(): number {
+  if (sensorData.length === 0) return 0.65;
+  const values = sensorData.map(r => r.PowerFactor).filter(v => typeof v === 'number' && !Number.isNaN(v));
+  if (values.length === 0) return 0.65;
+  const avg = values.reduce((sum, v) => sum + v, 0) / values.length;
+  return Math.round(avg * 100) / 100;
+}
+
+export function getMaxPowerImbalance(): number {
+  if (sensorData.length === 0) return 127;
+  
+  // Group by channel (phase) and get max active power for each
+  const maxByPhase = new Map<string, number>();
+  sensorData.forEach(r => {
+    const channel = r.Channel?.toString() || 'A';
+    const pA = r['ActivePower [W]'] ?? 0;
+    const current = maxByPhase.get(channel) ?? 0;
+    maxByPhase.set(channel, Math.max(current, pA));
+  });
+  
+  const powers = Array.from(maxByPhase.values());
+  if (powers.length < 2) return 127;
+  
+  // Calculate max difference between any two phases
+  let maxDiff = 0;
+  for (let i = 0; i < powers.length; i++) {
+    for (let j = i + 1; j < powers.length; j++) {
+      maxDiff = Math.max(maxDiff, Math.abs(powers[i] - powers[j]));
+    }
+  }
+  return Math.round(maxDiff) || 127;
+}
+
+export function getWeeklyTotalEnergyKwh(): number {
+  const wh = getWeeklyTotalEnergyWh();
+  return Math.round(wh / 1000) || 1359;
+}
+
+export function getMaxEnergyKwh(): number {
+  if (sensorData.length === 0) return 0;
+  const accumSeries = getEnergyAccumulativeTimeSeries();
+  if (accumSeries.data.length === 0) return 0;
+  return Math.max(...accumSeries.data);
+}
+
+// Format energy value based on max energy in period
+// If max >= 1 kWh, format in kWh; otherwise format in Wh
+export function formatEnergyValue(valueInKwh: number): string {
+  const maxKwh = getMaxEnergyKwh();
+  
+  if (maxKwh >= 1) {
+    // Format in kWh
+    if (valueInKwh >= 1000) {
+      return (valueInKwh / 1000).toFixed(1) + ' MWh';
+    } else if (valueInKwh >= 1) {
+      return valueInKwh.toFixed(2) + ' kWh';
+    } else {
+      return (valueInKwh * 1000).toFixed(1) + ' Wh';
+    }
+  } else {
+    // Format in Wh
+    const valueInWh = valueInKwh * 1000;
+    if (valueInWh >= 1000000) {
+      return (valueInWh / 1000000).toFixed(1) + ' M Wh';
+    } else if (valueInWh >= 10000) {
+      return (valueInWh / 1000).toFixed(1) + ' k Wh';
+    } else {
+      return valueInWh.toFixed(2) + ' Wh';
+    }
+  }
+}
+
+// Return unit for charts (kWh or Wh)
+export function getEnergyUnit(): string {
+  const maxKwh = getMaxEnergyKwh();
+  return maxKwh >= 1 ? 'kWh' : 'Wh';
 }
 
 // ============================================================
