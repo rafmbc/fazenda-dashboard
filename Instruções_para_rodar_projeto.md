@@ -8,6 +8,6 @@ fazenda-dashboard/backend
 fazenda-dashboard/data
 fazenda-dashboard/frontend
 fazenda-dashboard/.gitignore
-fazenda-dashboard/README.md
+fazenda-dashboard/Instruções_para_rodar_projeto.md
 
 estrutura deve estar assim
