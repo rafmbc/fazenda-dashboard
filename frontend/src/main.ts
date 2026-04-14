@@ -83,4 +83,5 @@ window.addEventListener('DOMContentLoaded', () => {
   initLayoutPreference();
   const activeBtn = document.querySelector<HTMLElement>('.view-btn.active');
   if (activeBtn) switchView('operacional', activeBtn);
+  void fetchData();
 });

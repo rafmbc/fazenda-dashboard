@@ -142,6 +142,31 @@ export function getHumidityTimeSeries(talhaoId: string): { labels: string[]; dat
   });
 }
 
+export function getAllHumidityTimeSeries(
+  talhaoIds: string[] = ['A1', 'B2', 'C3', 'D4', 'E5']
+): { labels: string[]; series: Record<string, number[]> } {
+  if (sensorData.length === 0) {
+    return { labels: [], series: Object.fromEntries(talhaoIds.map(id => [id, []])) };
+  }
+
+  const ordered = sortSensorReadings(sensorData);
+  const labels = ordered.map(reading => {
+    const ms = toTimestampMs(reading.Timestamp);
+    return formatTimeLabel(ms, false);
+  });
+
+  const series: Record<string, number[]> = {};
+  talhaoIds.forEach(id => {
+    const humidityKey = `Humidity ${id} [%]` as keyof SensorData;
+    series[id] = ordered.map(reading => {
+      const val = reading[humidityKey];
+      return typeof val === 'number' && !Number.isNaN(val) ? parseFloat(val.toFixed(2)) : NaN;
+    });
+  });
+
+  return { labels, series };
+}
+
 export function getEnergyAccumulativeTimeSeries(): { labels: string[]; data: number[] } {
   if (sensorData.length === 0) return { labels: [], data: [] };
 

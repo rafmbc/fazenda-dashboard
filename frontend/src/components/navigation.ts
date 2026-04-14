@@ -36,6 +36,7 @@ export function goToSection(id: string, clickedEl: HTMLElement | null): void {
   if (clickedEl) clickedEl.classList.add('active');
 
   if (id === 'op-cameras') renderCameras();
+  if (id === 'op-umidade') setTimeout(initCharts, 50);
 }
 
 export function goToSectionMob(id: string, clickedEl: HTMLElement | null): void {
