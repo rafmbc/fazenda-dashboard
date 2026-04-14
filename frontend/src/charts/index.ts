@@ -1,5 +1,5 @@
 import { Chart, registerables } from 'chart.js';
-import { timeLabels, weekLabels, talhoes, getHumidityTimeSeries, getEnergyAccumulativeTimeSeries, getWeeklyEnergyData, getPowerFactorTimeSeries } from '../data/index.js';
+import { timeLabels, weekLabels, talhoes, getHumidityTimeSeries, getAllHumidityTimeSeries, getEnergyAccumulativeTimeSeries, getWeeklyEnergyData, getPowerFactorTimeSeries } from '../data/index.js';
 import { rand, cumsum, isDarkTheme } from '../utils/helpers.js';
 import { realData, realMaps } from '../utils/upload.js';
 
@@ -142,9 +142,21 @@ export function initCharts(): void {
   // -- Umidade por Talhão (op-umidade) --
   const umColors = ['#52c278', '#4a9eff', '#c8e63a', '#f0a500', '#e84545'];
   const selected = ['A1', 'B2', 'C3', 'D4', 'E5'];
+  const humiditySeries = getAllHumidityTimeSeries(selected);
+  const hasRealHumidityData = humiditySeries.labels.length > 0;
   const umDatasets = selected.map((name, i) => {
-    const series = getHumidityTimeSeries(name);
-    return { label: `Talhão ${name}`, data: series.data, borderColor: umColors[i], backgroundColor: umColors[i] + '18', tension: 0.4, fill: false, pointRadius: 1, borderWidth: 2 };
+    const talhaoBase = talhoes.find(t => t.id === name)?.umidade ?? 50;
+    return {
+      label: `Talhão ${name}`,
+      data: hasRealHumidityData ? (humiditySeries.series[name] ?? []) : rand(talhaoBase, 10, timeLabels.length),
+      borderColor: umColors[i],
+      backgroundColor: umColors[i] + '18',
+      tension: 0.25,
+      fill: false,
+      pointRadius: 1,
+      borderWidth: 2,
+      spanGaps: true,
+    };
   });
 
   const umLegend = document.getElementById('umidade-legend');
@@ -154,7 +166,7 @@ export function initCharts(): void {
     ).join('');
   }
 
-  const umLabels = getHumidityTimeSeries('A1').labels; // Assume same labels
+  const umLabels = hasRealHumidityData ? humiditySeries.labels : timeLabels;
 
   destroy('umidadeChart');
   instances['umidadeChart'] = new Chart(canvas('umidadeChart'), {

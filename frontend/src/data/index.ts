@@ -64,10 +64,17 @@ export interface SensorData {
 // ============================================================
 // DATA FETCHING
 // ============================================================
+const API_BASE_URL = 'http://localhost:8000/data';
+const DEFAULT_START = '2025-12-01 19:00:00';
+const DEFAULT_END = '2025-12-01 20:00:00';
+
 export async function fetchSensorData(start?: string, end?: string): Promise<SensorData[]> {
-  const defaultStart = '2025-12-01%2019:00:00';
-  const defaultEnd = '2025-12-01%2020:00:00';
-  const url = `http://localhost:8000/data?start=${start || defaultStart}&end=${end || defaultEnd}`;
+  const params = new URLSearchParams({
+    start: start || DEFAULT_START,
+    end: end || DEFAULT_END,
+    limit: '1500',
+  });
+  const url = `${API_BASE_URL}?${params.toString()}`;
   try {
     const response = await fetch(url);
     if (!response.ok) {
@@ -89,10 +96,11 @@ export async function updateTalhoesFromAPI(start?: string, end?: string): Promis
     return;
   }
 
-  sensorData = data; // Store the full data
+  const sorted = sortSensorReadings(data);
+  sensorData = sorted; // Store the ordered data
 
   // Assuming the latest data point
-  const latest = data[data.length - 1];
+  const latest = sorted[sorted.length - 1];
 
   // Map humidity to talhoes
   const humidityMap: Record<string, number> = {
@@ -116,7 +124,7 @@ export async function updateTalhoesFromAPI(start?: string, end?: string): Promis
       alerts: status === 'crit' ? 1 : 0,
       area: 100, // default
       cultura: 'Soja', // default
-      energia: latest["ActivePower [W]"] || 100,
+      energia: Math.round((latest.Energy_kWh_cum || 0) * 100) / 100,
     });
   });
 }
@@ -127,78 +135,92 @@ export async function updateTalhoesFromAPI(start?: string, end?: string): Promis
 export function getHumidityTimeSeries(talhaoId: string): { labels: string[]; data: number[] } {
   if (sensorData.length === 0) return { labels: [], data: [] };
 
-  const labels: string[] = [];
-  const data: number[] = [];
-
   const humidityKey = `Humidity ${talhaoId} [%]` as keyof SensorData;
-
-  sensorData.forEach(d => {
-    const timestamp = new Date(d.Timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-    labels.push(timestamp);
-    data.push(d[humidityKey] as number);
+  return buildAverageSeries(reading => reading[humidityKey] as number | undefined, {
+    decimals: 2,
+    includeSeconds: false,
   });
-
-  return { labels, data };
 }
 
-export function getEnergyTimeSeries(): { labels: string[]; data: number[] } {
-  if (sensorData.length === 0) return { labels: [], data: [] };
+export function getAllHumidityTimeSeries(
+  talhaoIds: string[] = ['A1', 'B2', 'C3', 'D4', 'E5']
+): { labels: string[]; series: Record<string, number[]> } {
+  if (sensorData.length === 0) {
+    return { labels: [], series: Object.fromEntries(talhaoIds.map(id => [id, []])) };
+  }
 
-  const labels: string[] = [];
-  const data: number[] = [];
-
-  sensorData.forEach(d => {
-    const timestamp = new Date(d.Timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-    labels.push(timestamp);
-    data.push(d["ActivePower [W]"]);
+  const ordered = sortSensorReadings(sensorData);
+  const labels = ordered.map(reading => {
+    const ms = toTimestampMs(reading.Timestamp);
+    return formatTimeLabel(ms, false);
   });
 
-  return { labels, data };
+  const series: Record<string, number[]> = {};
+  talhaoIds.forEach(id => {
+    const humidityKey = `Humidity ${id} [%]` as keyof SensorData;
+    series[id] = ordered.map(reading => {
+      const val = reading[humidityKey];
+      return typeof val === 'number' && !Number.isNaN(val) ? parseFloat(val.toFixed(2)) : NaN;
+    });
+  });
+
+  return { labels, series };
 }
 
 export function getEnergyAccumulativeTimeSeries(): { labels: string[]; data: number[] } {
   if (sensorData.length === 0) return { labels: [], data: [] };
 
-  const labels: string[] = [];
-  const data: number[] = [];
-
-  sensorData.forEach(d => {
-    const timestamp = new Date(d.Timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-    labels.push(timestamp);
-    data.push(d.Energy_kWh_cum);
+  const aggregated = new Map<number, number>();
+  sortSensorReadings(sensorData).forEach(reading => {
+    const ms = toTimestampMs(reading.Timestamp);
+    const value = reading.Energy_kWh_cum ?? 0;
+    const current = aggregated.get(ms) ?? 0;
+    aggregated.set(ms, Math.max(current, value));
   });
 
-  return { labels, data };
+  const times = Array.from(aggregated.keys()).sort((a, b) => a - b);
+  return {
+    labels: times.map(ms => formatTimeLabel(ms)),
+    data: times.map(ms => aggregated.get(ms) ?? 0),
+  };
+}
+
+export function getEnergyKwhTimeSeries(): { labels: string[]; data: number[] } {
+  if (sensorData.length === 0) return { labels: [], data: [] };
+  return buildSumSeries(reading => reading.Energy_kWh ?? 0);
 }
 
 export function getWeeklyEnergyData(): { labels: string[]; data: number[] } {
   if (sensorData.length === 0) return { labels: [], data: [] };
 
-  // Agregação por dia da semana (pega último valor do dia = consumo total)
-  const dailyTotals: Record<string, number> = {};
   const dayNames = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sab'];
-  
-  sensorData.forEach(d => {
-    const date = new Date(d.Timestamp);
+  const dailyTotals = new Map<string, { label: string; value: number; time: number }>();
+
+  sortSensorReadings(sensorData).forEach(reading => {
+    const date = new Date(reading.Timestamp);
     const dayKey = date.toISOString().split('T')[0]; // YYYY-MM-DD
     const dayName = dayNames[date.getDay()];
-    const key = `${dayName} ${dayKey}`; // Seg 2026-04-12
-    
-    // Sempre sobrescreve com o mais recente (último valor do dia = consumo acumulado)
-    dailyTotals[key] = d.Energy_kWh_cum || 0;
+    const label = `${dayName} ${dayKey}`;
+    dailyTotals.set(dayKey, { label, value: reading.Energy_kWh_cum || 0, time: date.getTime() });
   });
 
-  const labels = Object.keys(dailyTotals).slice(-7); // Últimos 7 dias
-  const data = labels.map(k => dailyTotals[k]);
+  const lastSeven = Array.from(dailyTotals.values())
+    .sort((a, b) => a.time - b.time)
+    .slice(-7);
 
-  return { labels, data };
+  return {
+    labels: lastSeven.map(item => item.label),
+    data: lastSeven.map(item => item.value),
+  };
 }
 
 export function getWeeklyTotalEnergyWh(): number {
   if (sensorData.length === 0) return 7; // Default 7 Wh
-  
-  const energies = sensorData.map(d => d.Energy_kWh_cum);
-  const maxEnergy = Math.max(...energies);
+
+  const accumSeries = getEnergyAccumulativeTimeSeries();
+  if (accumSeries.data.length === 0) return 7;
+
+  const maxEnergy = Math.max(...accumSeries.data);
   const whValue = maxEnergy * 1000; // Converter kWh para Wh
   
   // Retornar em Wh (arredondar para 1 casa decimal)
@@ -207,23 +229,79 @@ export function getWeeklyTotalEnergyWh(): number {
 
 export function getPowerFactorTimeSeries(): { labels: string[]; data: number[] } {
   if (sensorData.length === 0) return { labels: [], data: [] };
-
-  const labels: string[] = [];
-  const data: number[] = [];
-
-  sensorData.forEach(d => {
-    const timestamp = new Date(d.Timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-    labels.push(timestamp);
-    data.push(d.PowerFactor);
-  });
-
-  return { labels, data };
+  return buildAverageSeries(reading => reading.PowerFactor, { decimals: 3 });
 }
 
 // ============================================================
 // DATA STORAGE
 // ============================================================
 export let sensorData: SensorData[] = [];
+
+function toTimestampMs(timestamp: string): number {
+  return new Date(timestamp).getTime();
+}
+
+function sortSensorReadings(readings: SensorData[]): SensorData[] {
+  return [...readings].sort((a, b) => toTimestampMs(a.Timestamp) - toTimestampMs(b.Timestamp));
+}
+
+const TIME_WITH_SECONDS: Intl.DateTimeFormatOptions = { hour: '2-digit', minute: '2-digit', second: '2-digit' };
+const TIME_NO_SECONDS: Intl.DateTimeFormatOptions = { hour: '2-digit', minute: '2-digit' };
+
+function formatTimeLabel(ms: number, includeSeconds = true): string {
+  return new Date(ms).toLocaleTimeString('pt-BR', includeSeconds ? TIME_WITH_SECONDS : TIME_NO_SECONDS);
+}
+
+interface AverageSeriesOptions {
+  decimals?: number;
+  includeSeconds?: boolean;
+}
+
+function buildAverageSeries(
+  accessor: (reading: SensorData) => number | undefined,
+  opts?: AverageSeriesOptions
+): { labels: string[]; data: number[] } {
+  const decimals = opts?.decimals ?? 2;
+  const includeSeconds = opts?.includeSeconds ?? true;
+  const aggregated = new Map<number, { sum: number; count: number }>();
+
+  sortSensorReadings(sensorData).forEach(reading => {
+    const value = accessor(reading);
+    if (typeof value !== 'number' || Number.isNaN(value)) return;
+    const ms = toTimestampMs(reading.Timestamp);
+    const entry = aggregated.get(ms) ?? { sum: 0, count: 0 };
+    entry.sum += value;
+    entry.count += 1;
+    aggregated.set(ms, entry);
+  });
+
+  const times = Array.from(aggregated.keys()).sort((a, b) => a - b);
+  return {
+    labels: times.map(ms => formatTimeLabel(ms, includeSeconds)),
+    data: times.map(ms => {
+      const entry = aggregated.get(ms)!;
+      const avg = entry.sum / entry.count || 0;
+      return parseFloat(avg.toFixed(decimals));
+    }),
+  };
+}
+
+function buildSumSeries(accessor: (reading: SensorData) => number | undefined): { labels: string[]; data: number[] } {
+  const aggregated = new Map<number, number>();
+
+  sortSensorReadings(sensorData).forEach(reading => {
+    const value = accessor(reading);
+    if (typeof value !== 'number' || Number.isNaN(value)) return;
+    const ms = toTimestampMs(reading.Timestamp);
+    aggregated.set(ms, (aggregated.get(ms) ?? 0) + value);
+  });
+
+  const times = Array.from(aggregated.keys()).sort((a, b) => a - b);
+  return {
+    labels: times.map(ms => formatTimeLabel(ms)),
+    data: times.map(ms => parseFloat((aggregated.get(ms) ?? 0).toFixed(4))),
+  };
+}
 
 // ============================================================
 // STATIC DATA (fallback)

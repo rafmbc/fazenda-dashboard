@@ -1,5 +1,5 @@
 import { renderTalhaoMap, renderAlertsList, renderTalhaoList, renderGauges, renderSetorBars, registerIntervention, openTalhaoDetail } from './components/renderers.js';
-import { goToSection, goToSectionMob, switchView, toggleTheme, toggleLayout, highlightNav } from './components/navigation.js';
+import { goToSection, goToSectionMob, switchView, toggleTheme, toggleLayout, highlightNav, initLayoutPreference } from './components/navigation.js';
 import { initCharts, switchEnergyTab } from './charts/index.js';
 import { openUploadModal, closeUploadModal, switchUploadTab, handleFile, applyData } from './utils/upload.js';
 import { updateTalhoesFromAPI } from './data/index.js';
@@ -49,6 +49,7 @@ declare global {
     switchEnergyTab: typeof switchEnergyTab;
     toggleTheme: typeof toggleTheme;
     toggleLayout: typeof toggleLayout;
+    initLayoutPreference: typeof initLayoutPreference;
     highlightNav: typeof highlightNav;
     openUploadModal: typeof openUploadModal;
     closeUploadModal: typeof closeUploadModal;
@@ -67,6 +68,7 @@ window.switchView = switchView;
 window.switchEnergyTab = switchEnergyTab;
 window.toggleTheme = toggleTheme;
 window.toggleLayout = toggleLayout;
+window.initLayoutPreference = initLayoutPreference;
 window.highlightNav = highlightNav;
 window.openUploadModal = openUploadModal;
 window.closeUploadModal = closeUploadModal;
@@ -78,6 +80,8 @@ window.openTalhaoDetail = openTalhaoDetail;
 window.fetchData = fetchData;
 
 window.addEventListener('DOMContentLoaded', () => {
+  initLayoutPreference();
   const activeBtn = document.querySelector<HTMLElement>('.view-btn.active');
   if (activeBtn) switchView('operacional', activeBtn);
+  void fetchData();
 });

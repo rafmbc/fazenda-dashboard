@@ -33,11 +33,12 @@
 
     <div class="header-controls">
       <div class="date-picker">
-        <input type="datetime-local" id="start-date" value="2025-12-01T19:00" title="Data de Início">
+        <input type="datetime-local" id="start-date" value="2025-12-01T19:20:42" step="1" title="Data de Início">
         <span>até</span>
-        <input type="datetime-local" id="end-date" value="2025-12-01T20:00" title="Data de Fim">
+        <input type="datetime-local" id="end-date" value="2025-12-27T16:18:41" step="1" title="Data de Fim">
         <button onclick="fetchData()" title="Buscar Dados">🔍</button>
       </div>
+      <button class="ctrl-btn layout-btn" onclick="toggleLayout()" title="Ativar visão para celular" id="layout-btn" aria-label="Alternar visão para celular" aria-pressed="false">📱</button>
       <button class="ctrl-btn" onclick="toggleTheme()" title="Alternar tema" id="theme-btn">🌙</button>
     </div>
   </header>
