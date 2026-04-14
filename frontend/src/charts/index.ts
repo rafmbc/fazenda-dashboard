@@ -1,5 +1,5 @@
 import { Chart, registerables } from 'chart.js';
-import { timeLabels, weekLabels, talhoes, getHumidityTimeSeries, getEnergyAccumulativeTimeSeries, getWeeklyEnergyData, getPowerFactorTimeSeries } from '../data/index.js';
+import { timeLabels, weekLabels, talhoes, getHumidityTimeSeries, getEnergyKwhTimeSeries, getWeeklyEnergyData, getPowerFactorTimeSeries } from '../data/index.js';
 import { rand, cumsum, isDarkTheme } from '../utils/helpers.js';
 import { realData, realMaps } from '../utils/upload.js';
 
